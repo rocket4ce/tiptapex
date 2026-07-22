@@ -1,0 +1,956 @@
+/* ============================================================
+   Tiptapex — Tiptap editor look & feel for Phoenix LiveView.
+   Scoped under .ttx-editor (editor) and .ttx-prose (read-only
+   content) so it never bleeds into the host app.
+
+   Theming: every color flows through a --ttx-* custom property
+   that falls back to the daisyUI theme tokens when present and
+   to neutral defaults otherwise. Override any of these in your
+   own CSS to re-skin the editor:
+
+     :root {
+       --ttx-primary: #7c3aed;
+     }
+   ============================================================ */
+
+.ttx-editor,
+.ttx-viewer,
+.ttx-prose,
+.ttx-table-menu {
+  --ttx-surface: var(--color-base-100, #ffffff);
+  --ttx-surface-2: var(--color-base-200, #f3f4f6);
+  --ttx-border: var(--color-base-300, #e5e7eb);
+  --ttx-text: var(--color-base-content, #1f2937);
+  --ttx-primary: var(--color-primary, #2563eb);
+  --ttx-primary-content: var(--color-primary-content, #ffffff);
+  --ttx-error: var(--color-error, #dc2626);
+}
+
+.ttx-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+}
+
+/* ---------- Toolbar ----------------------------------------- */
+
+.ttx-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--ttx-surface);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ttx-border);
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+}
+
+.ttx-toolbar .ttx-tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0 0.25rem;
+  border-right: 1px solid var(--ttx-border);
+}
+
+.ttx-toolbar .ttx-tb-group:last-child {
+  border-right: none;
+}
+
+.ttx-toolbar .ttx-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ttx-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 80ms ease, border-color 80ms ease, color 80ms ease;
+}
+
+.ttx-toolbar .ttx-tb-btn:hover {
+  /* base-200 is too close to base-100 in light themes → use a tinted overlay
+     that always reads as "darker than the surface" regardless of theme. */
+  background: color-mix(in oklch, var(--ttx-text) 10%, transparent);
+}
+
+.ttx-toolbar .ttx-tb-btn.is-active {
+  background: var(--ttx-primary);
+  color: var(--ttx-primary-content);
+}
+
+.ttx-toolbar .ttx-tb-btn:focus-visible {
+  outline: 2px solid var(--ttx-primary);
+  outline-offset: 1px;
+}
+
+.ttx-toolbar .ttx-tb-btn svg {
+  width: 1rem;
+  height: 1rem;
+  stroke: currentColor;
+}
+
+.ttx-toolbar .ttx-tb-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--ttx-text);
+}
+
+.ttx-toolbar .ttx-tb-select select {
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--ttx-border);
+  background: var(--ttx-surface);
+  font-size: 0.75rem;
+  color: var(--ttx-text);
+  cursor: pointer;
+}
+
+.ttx-toolbar .ttx-tb-select select:hover {
+  border-color: var(--ttx-text);
+}
+
+/* Color palette popovers --------------------------------------- */
+.ttx-toolbar .ttx-tb-palette {
+  position: relative;
+  display: inline-flex;
+}
+
+.ttx-toolbar .ttx-tb-palette > button.ttx-tb-btn-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ttx-text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ttx-toolbar .ttx-tb-palette > button.ttx-tb-btn-trigger:hover {
+  background: color-mix(in oklch, var(--ttx-text) 10%, transparent);
+}
+
+.ttx-toolbar .ttx-tb-palette > button.ttx-tb-btn-trigger .ttx-tb-color-dot {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.2rem;
+  border: 1px solid var(--ttx-border);
+}
+
+.ttx-toolbar .ttx-tb-popover {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 30;
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  width: 11rem;
+  background: var(--ttx-surface);
+  border: 1px solid var(--ttx-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+}
+
+.ttx-toolbar .ttx-tb-palette.is-open .ttx-tb-popover {
+  display: flex;
+}
+
+.ttx-toolbar .ttx-tb-swatch {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 80ms ease;
+}
+
+.ttx-toolbar .ttx-tb-swatch:hover {
+  transform: scale(1.1);
+}
+
+.ttx-toolbar .ttx-tb-swatch.is-clear {
+  background: transparent;
+  color: var(--ttx-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Content area ----------------------------------- */
+
+.ttx-content {
+  position: relative; /* anchor for the absolutely-positioned drag handle */
+  flex: 1;
+  /* No horizontal padding: we move it onto the ProseMirror itself so the
+     drag handle (which floating-ui anchors to the block's left edge) lands
+     INSIDE the ProseMirror bounding box. If padding lived here, the mouse
+     would have to cross the editor-content gutter to reach the handle and
+     ProseMirror's `mouseleave` would fire (relatedTarget = .ttx-content,
+     not within the drag-handle wrapper) → handle hides. */
+  padding: 2rem 0;
+  min-height: 480px;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--ttx-text);
+}
+
+.ttx-content :where(.ProseMirror) {
+  outline: none;
+  min-height: 100%;
+  padding: 0 3rem; /* gutter lives inside the editable surface */
+}
+
+.ttx-content :where(.ProseMirror) p {
+  margin: 0 0 0.85em 0;
+}
+
+.ttx-content :where(.ProseMirror) h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1.25em 0 0.5em;
+}
+
+.ttx-content :where(.ProseMirror) h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 1.25em 0 0.5em;
+}
+
+.ttx-content :where(.ProseMirror) h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+}
+
+.ttx-content :where(.ProseMirror) ul,
+.ttx-content :where(.ProseMirror) ol {
+  padding-left: 1.5rem;
+  margin: 0 0 0.85em 0;
+}
+
+.ttx-content :where(.ProseMirror) li {
+  margin: 0.15em 0;
+}
+
+.ttx-content :where(.ProseMirror) ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ttx-content :where(.ProseMirror) ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.ttx-content :where(.ProseMirror) blockquote {
+  border-left: 3px solid var(--ttx-primary);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: color-mix(in oklch, var(--ttx-text) 75%, transparent);
+  margin: 1em 0;
+  font-style: italic;
+}
+
+.ttx-content :where(.ProseMirror) code {
+  background: var(--ttx-surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.ttx-content :where(.ProseMirror) pre {
+  background: var(--ttx-border);
+  color: var(--ttx-text);
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.875em;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+
+.ttx-content :where(.ProseMirror) pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.ttx-content :where(.ProseMirror) hr {
+  border: none;
+  border-top: 1px solid var(--ttx-border);
+  margin: 2em 0;
+}
+
+.ttx-content :where(.ProseMirror) a {
+  color: var(--ttx-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ttx-content :where(.ProseMirror) img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75em 0;
+}
+
+/* Tables ------------------------------------------------------ */
+.ttx-content :where(.ProseMirror) table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.ttx-content :where(.ProseMirror) th,
+.ttx-content :where(.ProseMirror) td {
+  border: 1px solid var(--ttx-border);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  font-size: 0.9em;
+}
+
+.ttx-content :where(.ProseMirror) th {
+  background: var(--ttx-surface-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Placeholder ------------------------------------------------- */
+.ttx-content :where(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: color-mix(in oklch, var(--ttx-text) 40%, transparent);
+}
+
+/* Focus / invisibles / saved selection
+   NOTE: daisyUI v5 exposes `--color-primary` as a full `oklch(...)` value,
+   so `oklch(var(--color-primary) / N)` is invalid CSS and gets dropped.
+   We use `color-mix(in oklch, ...)` which accepts any color form. */
+.ttx-content :where(.ProseMirror .is-focused) {
+  background: linear-gradient(180deg, transparent 0%, color-mix(in oklch, var(--ttx-primary) 6%, transparent) 100%);
+  border-radius: 0.25rem;
+  padding: 0.05em 0.1em;
+  margin: -0.05em -0.1em;
+}
+
+.ttx-content :where(.ProseMirror .tiptap-invisible-character) {
+  color: color-mix(in oklch, var(--ttx-text) 30%, transparent);
+  font-size: 0.85em;
+  user-select: none;
+}
+
+.ttx-content :where(.ProseMirror .ProseMirror-saved-selection) {
+  background: color-mix(in oklch, var(--ttx-primary) 18%, transparent);
+}
+
+/* Selection highlight — Tiptap/ProseMirror swaps native browser selection for
+   `.ProseMirror-selectednode` (block selection) and for inline selections it
+   still uses native `::selection`. Style both. The selector specificity is
+   bumped (not wrapped in `:where`) so it always wins over user-agent styles. */
+.ttx-content .ProseMirror::selection,
+.ttx-content .ProseMirror ::selection {
+  background: color-mix(in oklch, var(--ttx-primary) 28%, transparent);
+  color: inherit;
+}
+
+.ttx-content .ProseMirror::-moz-selection,
+.ttx-content .ProseMirror ::-moz-selection {
+  background: color-mix(in oklch, var(--ttx-primary) 28%, transparent);
+  color: inherit;
+}
+
+.ttx-content .ProseMirror-selectednode {
+  outline: 2px solid var(--ttx-primary);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* ---------- Drag handle (block reordering) ----------------- */
+/* The DragHandle extension appends `.ttx-drag-handle` as a sibling of the
+   ProseMirror DOM and positions it with floating-ui. We give it an icon,
+   sizing, hover affordance and drag state. It renders inside .ttx-editor,
+   so the --ttx-* variables cascade to it. */
+.ttx-drag-handle {
+  /* The plugin sets `visibility: hidden` when there's no current target node
+     and clears it when there is, so we only style the chrome here. */
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  color: color-mix(in oklch, var(--ttx-text) 50%, transparent);
+  background: transparent;
+  cursor: grab;
+  transition: background-color 100ms ease, color 100ms ease;
+  z-index: 5;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.ttx-drag-handle::before {
+  /* 6-dot grip icon rendered via SVG data URL so we don't depend on a sprite */
+  content: "";
+  width: 0.75rem;
+  height: 1rem;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 16'><circle cx='2' cy='3' r='1.2'/><circle cx='6' cy='3' r='1.2'/><circle cx='2' cy='8' r='1.2'/><circle cx='6' cy='8' r='1.2'/><circle cx='2' cy='13' r='1.2'/><circle cx='6' cy='13' r='1.2'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 16'><circle cx='2' cy='3' r='1.2'/><circle cx='6' cy='3' r='1.2'/><circle cx='2' cy='8' r='1.2'/><circle cx='6' cy='8' r='1.2'/><circle cx='2' cy='13' r='1.2'/><circle cx='6' cy='13' r='1.2'/></svg>") no-repeat center / contain;
+}
+
+.ttx-drag-handle:hover {
+  background: color-mix(in oklch, var(--ttx-text) 10%, transparent);
+  color: var(--ttx-text);
+}
+
+.ttx-drag-handle:active,
+.ttx-drag-handle[data-dragging="true"] {
+  cursor: grabbing;
+  background: color-mix(in oklch, var(--ttx-primary) 15%, transparent);
+  color: var(--ttx-primary);
+}
+
+/* ---------- Footer ----------------------------------------- */
+
+.ttx-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--ttx-border);
+  padding: 0.5rem 0.75rem;
+  background: var(--ttx-surface-2);
+  font-size: 0.7rem;
+  color: color-mix(in oklch, var(--ttx-text) 70%, transparent);
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+/* ============================================================
+   Read-only content (.ttx-prose)
+   Used for the server-rendered output of Tiptapex.Renderer and
+   as the typography base of the hydrated viewer. Independent
+   from .ttx-content because it doesn't need contenteditable,
+   drag handle, sticky toolbar, etc.
+   ============================================================ */
+
+.ttx-prose {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--ttx-text);
+}
+
+/* When the viewer hook hydrates it creates a nested `.ProseMirror`.
+   Suppress its default outline (no caret here) and let our typography
+   styles cascade through. */
+.ttx-prose :where(.ProseMirror),
+.ttx-viewer :where(.ProseMirror) {
+  outline: none;
+}
+
+.ttx-prose :where(.ProseMirror) > *:first-child {
+  margin-top: 0;
+}
+
+.ttx-prose h1,
+.ttx-viewer h1 {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1.5em 0 0.5em;
+  scroll-margin-top: 1rem;
+}
+
+.ttx-prose h2,
+.ttx-viewer h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 1.25em 0 0.5em;
+  scroll-margin-top: 1rem;
+}
+
+.ttx-prose h3,
+.ttx-viewer h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  scroll-margin-top: 1rem;
+}
+
+.ttx-prose p,
+.ttx-viewer p {
+  margin: 0 0 0.85em 0;
+}
+
+.ttx-prose ul,
+.ttx-prose ol,
+.ttx-viewer ul,
+.ttx-viewer ol {
+  padding-left: 1.5rem;
+  margin: 0 0 0.85em 0;
+}
+
+.ttx-prose li,
+.ttx-viewer li {
+  margin: 0.15em 0;
+}
+
+.ttx-prose ul[data-type="taskList"],
+.ttx-viewer ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ttx-prose ul[data-type="taskList"] li,
+.ttx-viewer ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.ttx-prose blockquote,
+.ttx-viewer blockquote {
+  border-left: 3px solid var(--ttx-primary);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: color-mix(in oklch, var(--ttx-text) 75%, transparent);
+  margin: 1em 0;
+  font-style: italic;
+}
+
+.ttx-prose code,
+.ttx-viewer code {
+  background: var(--ttx-surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.ttx-prose pre,
+.ttx-viewer pre {
+  background: var(--ttx-border);
+  color: var(--ttx-text);
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.875em;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+
+.ttx-prose pre code,
+.ttx-viewer pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.ttx-prose hr,
+.ttx-viewer hr {
+  border: none;
+  border-top: 1px solid var(--ttx-border);
+  margin: 2em 0;
+}
+
+.ttx-prose a,
+.ttx-viewer a {
+  color: var(--ttx-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ttx-prose img,
+.ttx-viewer img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75em 0;
+}
+
+.ttx-prose table,
+.ttx-viewer table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  table-layout: fixed;
+}
+
+.ttx-prose th,
+.ttx-prose td,
+.ttx-viewer th,
+.ttx-viewer td {
+  border: 1px solid var(--ttx-border);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  font-size: 0.9em;
+}
+
+.ttx-prose th,
+.ttx-viewer th {
+  background: var(--ttx-surface-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* ============================================================
+   Collaboration cursors (CollaborationCaret extension)
+   The Tiptap default DOM is a `<span class="collaboration-carets__caret">`
+   wrapping a `<div class="collaboration-carets__label">`. We:
+   - render the caret as a thin vertical bar in the peer's color,
+   - float the label just above the line with a chip-like look,
+   - auto-hide the label after a short pause; reveal again on hover.
+   ============================================================ */
+
+.collaboration-carets__caret {
+  position: relative;
+  border-left: 2px solid currentColor; /* color set inline via style */
+  margin-left: -1px;
+  pointer-events: none;
+  word-break: normal;
+  /* Pick up the inline border-color so caret + label share the hue */
+  color: inherit;
+}
+
+.collaboration-carets__caret > .collaboration-carets__label {
+  position: absolute;
+  top: -1.5em;
+  left: -2px;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem 0.25rem 0.25rem 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-style: normal;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: white;
+  user-select: none;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.15);
+  opacity: 1;
+  transition: opacity 200ms ease;
+  animation: ttx-caret-label-fade 3s ease forwards;
+}
+
+/* Bring the label back when the user hovers over the caret. */
+.collaboration-carets__caret:hover > .collaboration-carets__label {
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes ttx-caret-label-fade {
+  0% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0.15; }
+}
+
+/* Selection highlight (block selected by peer) — Yjs broadcasts a
+   `.collaboration-carets__selection` decoration; tint it with their color. */
+.collaboration-carets__selection {
+  background-color: color-mix(in oklch, currentColor 18%, transparent);
+}
+
+/* ---------- Attachment drag affordance ----------------------- */
+/* When the user drags a host-provided attachment (data-ttx-attachment)
+   over the editor, glow the editable surface so it's obvious where it'll
+   land. */
+.ttx-content.ttx-drop-active {
+  background: color-mix(in oklch, var(--ttx-primary) 6%, transparent);
+  outline: 2px dashed color-mix(in oklch, var(--ttx-primary) 60%, transparent);
+  outline-offset: -4px;
+  transition: background 80ms ease, outline 80ms ease;
+}
+
+/* ---------- Resizable image (ResizableImage extension) ------ */
+.ttx-resize-wrapper {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  max-width: 100%;
+  vertical-align: top;
+  /* Aspect ratio is preserved by letting the image's height auto-flow. */
+}
+
+.ttx-resize-wrapper img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  user-select: none;
+}
+
+.ttx-resize-wrapper.is-selected {
+  outline: 2px solid var(--ttx-primary);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.ttx-resize-wrapper.is-resizing img {
+  pointer-events: none;
+}
+
+.ttx-resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--ttx-primary);
+  border: 2px solid var(--ttx-primary-content);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--ttx-primary), 0 1px 2px rgba(15, 23, 42, 0.3);
+  z-index: 20;
+  /* Hidden until the wrapper is selected. */
+  display: none;
+  touch-action: none;
+}
+
+.ttx-resize-wrapper.is-selected .ttx-resize-handle {
+  display: block;
+}
+
+.ttx-resize-nw { top: -8px; left: -8px; cursor: nwse-resize; }
+.ttx-resize-ne { top: -8px; right: -8px; cursor: nesw-resize; }
+.ttx-resize-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.ttx-resize-se { bottom: -8px; right: -8px; cursor: nwse-resize; }
+
+/* Read-only views shouldn't expose handles (defensive — the extension
+   already skips them when editor.isEditable is false). */
+.ttx-prose .ttx-resize-handle,
+.ttx-viewer .ttx-resize-handle { display: none !important; }
+
+/* ---------- Video node (Video extension) -------------------- */
+.ttx-video {
+  position: relative;
+  display: block;
+  margin: 1em auto;
+  max-width: 100%;
+  line-height: 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--ttx-border);
+}
+
+/* YouTube embeds use a 16:9 ratio so changing width keeps the iframe sized. */
+.ttx-video-youtube {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 720px;
+}
+
+.ttx-video-youtube iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* Native file videos let their natural aspect ratio flow. */
+.ttx-video-file {
+  width: 100%;
+  max-width: 720px;
+}
+
+.ttx-video-file video {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: black;
+  border-radius: 0.5rem;
+}
+
+/* When the editor is editable, show selection outline + resize handles
+   (they share styles with .ttx-resize-wrapper). */
+.ttx-video-wrapper.is-selected {
+  outline: 2px solid var(--ttx-primary);
+  outline-offset: 2px;
+}
+
+.ttx-video-wrapper .ttx-resize-handle {
+  display: none;
+}
+.ttx-video-wrapper.is-selected .ttx-resize-handle {
+  display: block;
+}
+
+.ttx-video-wrapper.is-resizing iframe,
+.ttx-video-wrapper.is-resizing video {
+  pointer-events: none;
+}
+
+/* ---------- Floating table contextual menu ------------------ */
+.ttx-table-menu {
+  position: fixed;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--ttx-surface);
+  border: 1px solid var(--ttx-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.ttx-table-menu-group {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0 0.25rem;
+  border-right: 1px solid var(--ttx-border);
+}
+.ttx-table-menu-group:last-child {
+  border-right: none;
+}
+
+.ttx-table-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.35rem;
+  color: var(--ttx-text);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 80ms ease, color 80ms ease;
+}
+.ttx-table-menu-btn:hover {
+  background: color-mix(in oklch, var(--ttx-text) 10%, transparent);
+}
+.ttx-table-menu-btn:active {
+  background: color-mix(in oklch, var(--ttx-primary) 18%, transparent);
+}
+.ttx-table-menu-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* The trash button stands out in red. */
+.ttx-table-menu-group:last-child .ttx-table-menu-btn:last-child {
+  color: var(--ttx-error);
+}
+.ttx-table-menu-group:last-child .ttx-table-menu-btn:last-child:hover {
+  background: color-mix(in oklch, var(--ttx-error) 15%, transparent);
+}
+
+/* ---------- ProseMirror table chrome ------------------------ */
+/* Tiptap's column resizer leaves a `colgroup` + `.column-resize-handle`.
+   Give it a visible affordance instead of the invisible default. */
+.ttx-content :where(.ProseMirror) .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: var(--ttx-primary);
+  opacity: 0;
+  cursor: col-resize;
+  transition: opacity 80ms ease;
+  z-index: 5;
+}
+.ttx-content :where(.ProseMirror) td:hover > .column-resize-handle,
+.ttx-content :where(.ProseMirror) th:hover > .column-resize-handle,
+.ttx-content :where(.ProseMirror).resize-cursor .column-resize-handle {
+  opacity: 0.6;
+}
+
+/* Tiptap selectedCell decoration — tint cells in the active selection. */
+.ttx-content :where(.ProseMirror) td.selectedCell,
+.ttx-content :where(.ProseMirror) th.selectedCell {
+  background: color-mix(in oklch, var(--ttx-primary) 12%, transparent);
+  position: relative;
+}
+
+/* While dragging a column resizer, keep the col-resize cursor everywhere. */
+.ttx-content :where(.ProseMirror).resize-cursor {
+  cursor: col-resize;
+}
+
+/* ---------- CSS-only tooltip for the table menu -------------- */
+/* Activated by `data-tooltip="..."`. We use ::after for the bubble and
+   ::before for the arrow. Rendered BELOW the trigger so it never collides
+   with the menu sitting above the active cell.
+   The 150ms delay matches the "intentional hover" feel of native tooltips
+   without being as slow as the ~1s native default. */
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip] {
+  position: relative;
+}
+
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]::after,
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]::before {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease 150ms;
+}
+
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.5rem;
+  background: var(--ttx-text);
+  color: var(--ttx-surface);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.2;
+  border-radius: 0.3rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  z-index: 60;
+}
+
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-bottom-color: var(--ttx-text);
+  z-index: 61;
+}
+
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]:hover::after,
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]:hover::before,
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]:focus-visible::after,
+.ttx-table-menu .ttx-table-menu-btn[data-tooltip]:focus-visible::before {
+  opacity: 1;
+}
