@@ -1,0 +1,83 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": { "level": 1, "id": "intro" },
+      "content": [{ "type": "text", "text": "Title" }]
+    },
+    {
+      "type": "paragraph",
+      "attrs": { "textAlign": "center" },
+      "content": [
+        { "type": "text", "text": "Hello " },
+        { "type": "text", "text": "world", "marks": [{ "type": "bold" }] },
+        { "type": "text", "text": " " },
+        {
+          "type": "text",
+          "text": "link",
+          "marks": [{ "type": "link", "attrs": { "href": "https://example.com" } }]
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            { "type": "paragraph", "content": [{ "type": "text", "text": "One" }] }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            { "type": "paragraph", "content": [{ "type": "text", "text": "Two" }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "codeBlock",
+      "attrs": { "language": "elixir" },
+      "content": [{ "type": "text", "text": "IO.puts(\"hi\")" }]
+    },
+    { "type": "image", "attrs": { "src": "/uploads/a.png", "alt": "A", "width": 300 } },
+    { "type": "video", "attrs": { "src": "https://youtu.be/dQw4w9WgXcQ", "kind": "youtube" } },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableHeader",
+              "content": [
+                { "type": "paragraph", "content": [{ "type": "text", "text": "H" }] }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "content": [
+                { "type": "paragraph", "content": [{ "type": "text", "text": "D" }] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "taskList",
+      "content": [
+        {
+          "type": "taskItem",
+          "attrs": { "checked": true },
+          "content": [
+            { "type": "paragraph", "content": [{ "type": "text", "text": "Done" }] }
+          ]
+        }
+      ]
+    },
+    { "type": "horizontalRule" }
+  ]
+}
