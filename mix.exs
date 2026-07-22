@@ -64,7 +64,7 @@ defmodule Tiptapex.MixProject do
       main: "readme",
       source_url: @source_url,
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
       groups_for_modules: [
         Components: [Tiptapex.Components],
         Rendering: [
