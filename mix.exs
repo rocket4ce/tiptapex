@@ -54,8 +54,7 @@ defmodule Tiptapex.MixProject do
       maintainers: ["rocket4ce"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files:
-        ~w(lib assets priv/static/tiptapex.css package.json mix.exs README.md CHANGELOG.md
+      files: ~w(lib assets priv/static/tiptapex.css package.json mix.exs README.md CHANGELOG.md
            LICENSE .formatter.exs)
     ]
   end
