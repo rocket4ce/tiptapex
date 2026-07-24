@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-24
+
+### Added
+
+- Editable HTML source view in the editor: a new `html` toolbar group
+  (enabled by default, `</>` button) toggles between the WYSIWYG surface
+  and a textarea showing the document's pretty-printed HTML. Edits are
+  parsed back into the Tiptap document (debounced), so change events and
+  hidden-input sync keep working while in source mode. In collaborative
+  editors the parsed document is written through the shared Y.Doc so
+  source edits propagate to peers. Disable with
+  `extensions={%{html_view: false}}`. JS exports: `attachHtmlView/3`,
+  `formatHtml/1`, `htmlToJSON/2`.
+- Optional CodeMirror 6 surface for the HTML source view: build the hook
+  with `makeEditorHook({ htmlEditor: CodeMirrorHtmlEditor })` (new
+  `tiptapex/html-editor` entry point, optional `codemirror`/`@codemirror/*`
+  peers) to upgrade the source textarea to a real code editor with HTML/CSS
+  syntax highlighting, line numbers, and autocompletion. Any object
+  implementing the same surface contract can be plugged in instead.
+
 ## [0.1.0] - 2026-07-22
 
 ### Added
@@ -39,5 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   daisyUI tokens.
 - Single-file dev/demo server (`iex -S mix dev`).
 
-[Unreleased]: https://github.com/rocket4ce/tiptapex/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rocket4ce/tiptapex/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/rocket4ce/tiptapex/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rocket4ce/tiptapex/releases/tag/v0.1.0

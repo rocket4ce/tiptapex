@@ -201,6 +201,65 @@
   justify-content: center;
 }
 
+/* ---------- HTML source view -------------------------------- */
+
+/* Mounted by the hook next to .ttx-content; the `.ttx-html-mode` class on
+   the editor root swaps which of the two surfaces is visible. */
+.ttx-html-view {
+  display: none;
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  padding: 1.5rem 3rem;
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: var(--ttx-surface);
+  color: var(--ttx-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+/* When a code-editor surface is mounted (e.g. CodeMirrorHtmlEditor) the
+   element is a <div> hosting the editor, which brings its own padding,
+   gutters, and scrolling. */
+.ttx-html-view.is-code {
+  padding: 0;
+  resize: none;
+  overflow: hidden;
+}
+
+.ttx-html-view.is-code .cm-editor {
+  min-height: 480px;
+  max-height: 75vh;
+}
+
+.ttx-html-view.is-code .cm-scroller {
+  overflow: auto;
+}
+
+.ttx-editor.ttx-html-mode .ttx-content {
+  display: none;
+}
+
+.ttx-editor.ttx-html-mode .ttx-html-view {
+  display: block;
+}
+
+/* While editing source, WYSIWYG buttons don't apply — keep only the
+   toggle usable. */
+.ttx-editor.ttx-html-mode .ttx-toolbar .ttx-tb-group {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.ttx-editor.ttx-html-mode .ttx-toolbar .ttx-tb-group:has([data-ttx-html-toggle]) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ---------- Content area ----------------------------------- */
 
 .ttx-content {

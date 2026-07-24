@@ -48,6 +48,7 @@ import { SelectionPreserve } from "./extensions/selection-preserve"
 
 import { buildToolbar } from "./toolbar"
 import { attachTableMenu } from "./table-menu"
+import { attachHtmlView } from "./html-view"
 import { DEFAULTS, EMPTY_DOC, ATTACHMENT_MIME, parseJSON, csrfToken } from "./config"
 
 export const DEFAULT_UPLOAD_MIME_TYPES = [
@@ -246,6 +247,7 @@ function readOpts(el) {
 //
 //   makeEditorHook({
 //     collab: CollabPlugin,            // from "tiptapex/collaboration"
+//     htmlEditor: CodeMirrorHtmlEditor, // from "tiptapex/html-editor"
 //     extend: (extensions) => [...],   // add/replace Tiptap extensions
 //     toolbar: { custom: [...] },      // extra toolbar config (merged)
 //   })
@@ -330,6 +332,9 @@ export function makeEditorHook(staticOpts = {}) {
         } else {
           this.editor.commands.setContent(json)
         }
+        // Keep the HTML source view (if showing) in step so a stale
+        // textarea doesn't overwrite the pushed content on the next edit.
+        this._htmlView?.refresh()
       }
 
       // First user to enter a collaborative room seeds the Y.Doc with the
@@ -344,6 +349,21 @@ export function makeEditorHook(staticOpts = {}) {
         }, 800)
       }
 
+      // ---- Editable HTML source view (optional) ----------------
+      // Under collaboration the parsed document is applied through the
+      // Y.Doc (a plain setContent gets reverted by the sync plugin), so the
+      // view needs a collab plugin that supports setContent.
+      if (opts.extensions.htmlView !== false && (!collab || staticOpts.collab?.setContent)) {
+        this._htmlView = attachHtmlView(this.editor, el, {
+          debounceMs: opts.debounceMs,
+          codeEditor: staticOpts.htmlEditor || null,
+          applyJSON: collab
+            ? (json) => staticOpts.collab.setContent(collab, this.editor, json)
+            : null,
+        })
+        el.tiptapexHtmlView = this._htmlView
+      }
+
       if (toolbarEl && opts.toolbar !== false) {
         try {
           const toolbarConfig = Array.isArray(opts.toolbar)
@@ -352,6 +372,7 @@ export function makeEditorHook(staticOpts = {}) {
           buildToolbar(this.editor, toolbarEl, {
             ...toolbarConfig,
             ...(staticOpts.toolbar || {}),
+            htmlView: this._htmlView,
             labels: { ...(toolbarConfig.labels || {}), ...opts.labels },
             uploadFiles: onUploadFiles
               ? (files, pos) => onUploadFiles(this.editor, files, pos)
@@ -507,6 +528,7 @@ export function makeEditorHook(staticOpts = {}) {
       if (this._seedTimer) clearTimeout(this._seedTimer)
       if (this._debounceTimer) this._debounceTimer()
       if (this._detachTableMenu) this._detachTableMenu()
+      if (this._htmlView) this._htmlView.destroy()
       if (this._onUploadedHandler) {
         this.el.removeEventListener("tiptapex:uploaded", this._onUploadedHandler)
       }

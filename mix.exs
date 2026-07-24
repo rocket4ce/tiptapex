@@ -1,7 +1,7 @@
 defmodule Tiptapex.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/rocket4ce/tiptapex"
 
   def project do
@@ -90,7 +90,13 @@ defmodule Tiptapex.MixProject do
   defp aliases do
     [
       dev: "run --no-halt dev.exs",
-      "dev.assets": ["esbuild.install --if-missing", "esbuild dev_app"]
+      "dev.assets": [
+        "esbuild.install --if-missing",
+        "esbuild dev_app",
+        # priv/static/tiptapex.css is the served + Hex-packaged copy of the
+        # stylesheet; keep it in step with the source in assets/css.
+        "cmd cp assets/css/tiptapex.css priv/static/tiptapex.css"
+      ]
     ]
   end
 end

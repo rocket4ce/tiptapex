@@ -5,7 +5,7 @@
 Tiptapex packages a production-grade editor integration as a single Hex package:
 
 - **`<.tiptapex_editor>` / `<.tiptapex_viewer>`** — HEEx function components backed by JS hooks shipped inside this package.
-- **A full-featured editor** — toolbar (marks, headings, alignment, lists, fonts, colors), resizable images and videos (file + YouTube embeds), tables with a floating context menu, task lists, drag-handle block reordering, placeholder, character count, invisible characters.
+- **A full-featured editor** — toolbar (marks, headings, alignment, lists, fonts, colors), resizable images and videos (file + YouTube embeds), tables with a floating context menu, task lists, drag-handle block reordering, placeholder, character count, invisible characters, editable HTML source view.
 - **`Tiptapex.Renderer`** — converts the Tiptap/ProseMirror JSON document to **safe, escaped HTML on the server**. No `raw/1`, no trusting client-generated HTML, no stored-XSS surface.
 - **Uploads** — a `Tiptapex.Upload` behaviour + controller macro with real server-side validation (size limits and magic-byte content-type sniffing).
 - **Realtime collaboration (optional)** — Yjs over Phoenix Channels via `use Tiptapex.Collab.Channel` and a bundled provider; multiple users edit the same doc with live carets.
@@ -156,6 +156,7 @@ The hook keeps the input in sync with the document JSON and triggers your form's
 | --- | --- |
 | `toolbar={[:marks, :blocks, :lists, :history]}` | ordered subset of groups; `false` hides the toolbar |
 | `extensions={%{table: false, character_count_limit: 10_000}}` | per-feature switches for the JS extension matrix |
+| `extensions={%{html_view: false}}` | disables the toolbar's editable HTML source view (`</>` button) |
 | `labels={%{bold: "Negrita", insert_link: "Insertar enlace"}}` | i18n for toolbar/table menu (English defaults) |
 | `remount_key={@editor_session}` | bump to force a client remount (e.g. after restoring a version) |
 | `count_template="{chars} caracteres · {words} palabras"` | footer counter format |
@@ -275,6 +276,23 @@ Component:
 ```
 
 The server relays binary Yjs sync/awareness messages between peers; your save flow remains the source of truth. Optional `load_state/2` / `persist_update/3` callbacks support snapshotting — see `Tiptapex.Collab.Channel`.
+
+### HTML source view with CodeMirror
+
+The toolbar's `</>` button swaps the WYSIWYG surface for an editable HTML source view. Out of the box it is a plain `<textarea>`; upgrade it to a full code editor (syntax highlighting, line numbers, autocompletion for HTML/CSS) by installing the optional CodeMirror peers and building your hook with it:
+
+```sh
+npm install codemirror @codemirror/lang-html @codemirror/view @codemirror/commands
+```
+
+```js
+import { makeEditorHook } from "tiptapex"
+import { CodeMirrorHtmlEditor } from "tiptapex/html-editor"
+
+const TiptapexEditor = makeEditorHook({ htmlEditor: CodeMirrorHtmlEditor })
+```
+
+Like collaboration, this is a separate entry point so CodeMirror stays out of bundles that don't use it. Any object implementing the same surface contract (`create/getValue/setValue/focus/destroy`) can be passed instead — see `assets/js/tiptapex/html-view.js`.
 
 ### Custom Tiptap extensions
 

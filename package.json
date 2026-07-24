@@ -1,6 +1,6 @@
 {
   "name": "tiptapex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tiptap v3 rich-text editor hooks and components for Phoenix LiveView. Shipped as raw ESM inside the tiptapex Hex package; install the @tiptap/* peer dependencies in your host app.",
   "license": "MIT",
   "type": "module",
@@ -9,6 +9,7 @@
   "exports": {
     ".": "./assets/js/tiptapex/index.js",
     "./collaboration": "./assets/js/tiptapex/collaboration.js",
+    "./html-editor": "./assets/js/tiptapex/html-editor.js",
     "./css": "./priv/static/tiptapex.css"
   },
   "files": [
@@ -44,12 +45,20 @@
     "@tiptap/extension-unique-id": "^3.23.0",
     "@tiptap/pm": "^3.23.0",
     "@tiptap/starter-kit": "^3.23.0",
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/view": "^6.43.6",
+    "codemirror": "^6.0.2",
     "lib0": "^0.2.117",
     "y-prosemirror": "^1.2.12",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.20"
   },
   "peerDependenciesMeta": {
+    "@codemirror/commands": { "optional": true },
+    "@codemirror/lang-html": { "optional": true },
+    "@codemirror/view": { "optional": true },
+    "codemirror": { "optional": true },
     "@tiptap/extension-collaboration": { "optional": true },
     "@tiptap/extension-collaboration-caret": { "optional": true },
     "lib0": { "optional": true },

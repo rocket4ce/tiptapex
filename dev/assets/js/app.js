@@ -5,9 +5,10 @@ import { LiveSocket } from "phoenix_live_view"
 
 import { makeEditorHook, TiptapexViewerHook } from "tiptapex"
 import { CollabPlugin } from "tiptapex/collaboration"
+import { CodeMirrorHtmlEditor } from "tiptapex/html-editor"
 
 const hooks = {
-  TiptapexEditor: makeEditorHook({ collab: CollabPlugin }),
+  TiptapexEditor: makeEditorHook({ collab: CollabPlugin, htmlEditor: CodeMirrorHtmlEditor }),
   TiptapexViewer: TiptapexViewerHook,
 }
 

@@ -3,6 +3,9 @@
   "private": true,
   "description": "JS dependencies for the tiptapex dev/demo app. These mirror the peerDependencies a host app installs.",
   "dependencies": {
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/view": "^6.43.6",
     "@tiptap/core": "^3.23.0",
     "@tiptap/extension-bubble-menu": "^3.23.0",
     "@tiptap/extension-character-count": "^3.23.0",
@@ -31,6 +34,7 @@
     "@tiptap/extension-unique-id": "^3.23.0",
     "@tiptap/pm": "^3.23.0",
     "@tiptap/starter-kit": "^3.23.0",
+    "codemirror": "^6.0.2",
     "lib0": "^0.2.117",
     "y-prosemirror": "^1.2.12",
     "y-protocols": "^1.0.7",

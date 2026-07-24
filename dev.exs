@@ -26,7 +26,7 @@ Application.put_env(:tiptapex, Tiptapex.Upload.LocalDisk,
   url_prefix: "/uploads"
 )
 
-{:ok, _} =
+{:ok, sup} =
   Supervisor.start_link(
     [
       {Phoenix.PubSub, name: Tiptapex.DevPubSub},
@@ -39,6 +39,12 @@ Application.put_env(:tiptapex, Tiptapex.Upload.LocalDisk,
     ],
     strategy: :one_for_one
   )
+
+# Under `iex -S mix dev` this script's process exits as soon as the file
+# finishes evaluating, and a linked supervisor (supervisors trap exits and
+# shut down when their parent dies) would silently take the endpoint with
+# it. Unlink so the server survives the script under both entry points.
+Process.unlink(sup)
 
 IO.puts("\n== Tiptapex dev server running at http://localhost:4400 ==\n")
 

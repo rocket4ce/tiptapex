@@ -82,7 +82,10 @@ defmodule Tiptapex.Components do
     doc: """
     nil for the full default toolbar, false to hide it, a list of group
     atoms (:marks, :blocks, :align, :lists, :typography, :colors, :insert,
-    :utilities, :history) for an ordered subset, or a map for full config.
+    :utilities, :history, :html) for an ordered subset, or a map for full
+    config. The :html group toggles an editable HTML source view of the
+    document; in collaborative editors the edits are applied through the
+    shared Y.Doc so they propagate to peers.
     """
 
   attr :extensions, :map,
@@ -90,6 +93,7 @@ defmodule Tiptapex.Components do
     doc: """
     per-feature switches forwarded to the JS buildExtensions/1, e.g.
     %{table: false, drag_handle: false, character_count_limit: 10_000}.
+    %{html_view: false} disables the editable HTML source view.
     """
 
   attr :labels, :map, default: nil, doc: "i18n label overrides for toolbar and table menu"

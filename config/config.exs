@@ -14,6 +14,7 @@ if config_env() == :dev do
         --outdir=../../priv/static/dev
         --alias:tiptapex=../../assets/js/tiptapex/index.js
         --alias:tiptapex/collaboration=../../assets/js/tiptapex/collaboration.js
+        --alias:tiptapex/html-editor=../../assets/js/tiptapex/html-editor.js
       ),
       cd: Path.expand("../dev/assets", __DIR__),
       env: %{

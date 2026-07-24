@@ -43,6 +43,8 @@ export {
 
 export { attachTableMenu, DEFAULT_TABLE_LABELS } from "./table-menu"
 
+export { attachHtmlView, formatHtml, htmlToJSON } from "./html-view"
+
 export { ResizableImage } from "./extensions/resizable-image"
 export { Video, toYoutubeEmbed } from "./extensions/video"
 export { FontSize } from "./extensions/font-size"

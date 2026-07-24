@@ -8,7 +8,7 @@
 //
 //   buildToolbar(editor, root, {
 //     groups: ["marks", "blocks", "align", "lists", "typography",
-//              "colors", "insert", "utilities", "history"],   // ordered subset
+//              "colors", "insert", "utilities", "history", "html"], // ordered subset
 //     labels: { bold: "Negrita", ... },                       // i18n overrides
 //     textSizes, textColors, highlights, fontFamilies, lineHeights,
 //     uploadFiles: (files) => Promise,   // provided by the hook; omit to hide
@@ -36,6 +36,7 @@ export const DEFAULT_GROUPS = [
   "insert",
   "utilities",
   "history",
+  "html",
 ]
 
 export const DEFAULT_LABELS = {
@@ -75,6 +76,7 @@ export const DEFAULT_LABELS = {
   invisibleChars: "Show invisible characters",
   undo: "Undo (Cmd/Ctrl+Z)",
   redo: "Redo (Cmd/Ctrl+Shift+Z)",
+  htmlView: "Edit HTML source",
 }
 
 // SVG icon helper — uses Heroicons mini paths inline.
@@ -136,6 +138,8 @@ export const ICONS = {
       "M3 6h10v8H3z",
       "M13 8l4-2v8l-4-2",
     ]),
+  // Angle brackets with a slash — "edit the HTML source"
+  htmlSource: () => icon(["M6 6L2.5 10L6 14", "M14 6L17.5 10L14 14", "M11.5 4.5l-3 11"]),
   // YouTube-style play button inside a rounded rect
   youtube: () =>
     icon(
@@ -487,6 +491,25 @@ const GROUPS = {
       btn(ICONS.redo(), { title: t.redo, run: () => editor.chain().focus().redo().run() }),
     ])
   },
+
+  html(editor, t, config) {
+    // Only rendered when the hook mounted an HTML source view (it doesn't
+    // in collaborative editors, or when disabled via extensions config).
+    const view = config.htmlView
+    if (!view || typeof view.toggle !== "function") return null
+    // Toggling the source view fires neither `update` nor
+    // `selectionUpdate`, so the active class is synced manually here
+    // instead of through `activeWhen`.
+    const b = btn(ICONS.htmlSource(), {
+      title: t.htmlView,
+      run: () => {
+        view.toggle()
+        b.classList.toggle("is-active", view.isActive())
+      },
+    })
+    b.setAttribute("data-ttx-html-toggle", "")
+    return group([b])
+  },
 }
 
 export function buildToolbar(editor, root, config = {}) {
@@ -498,6 +521,7 @@ export function buildToolbar(editor, root, config = {}) {
     fontFamilies: config.fontFamilies || DEFAULT_FONT_FAMILIES,
     lineHeights: config.lineHeights || DEFAULT_LINE_HEIGHTS,
     uploadFiles: config.uploadFiles,
+    htmlView: config.htmlView,
     custom: config.custom || [],
   }
   const labels = { ...DEFAULT_LABELS, ...(config.labels || {}) }
@@ -510,7 +534,10 @@ export function buildToolbar(editor, root, config = {}) {
       console.warn(`[Tiptapex] unknown toolbar group "${name}"`)
       return
     }
-    root.appendChild(build(editor, labels, resolved))
+    // A group may opt out (return null) when its feature isn't available,
+    // e.g. "html" without a mounted source view.
+    const node = build(editor, labels, resolved)
+    if (node) root.appendChild(node)
   })
 
   if (resolved.custom.length > 0) {
