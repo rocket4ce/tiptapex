@@ -45,7 +45,11 @@ import { FontSize } from "./extensions/font-size"
 import { BackgroundColor } from "./extensions/background-color"
 import { TrailingNode } from "./extensions/trailing-node"
 import { SelectionPreserve } from "./extensions/selection-preserve"
+import { PageSetup } from "./extensions/page-setup"
+import { PageBreak } from "./extensions/page-break"
 
+import { Pagination } from "./pagination"
+import { resolvePageSetup } from "./page"
 import { buildToolbar } from "./toolbar"
 import { attachTableMenu } from "./table-menu"
 import { attachHtmlView } from "./html-view"
@@ -78,6 +82,17 @@ export function buildExtensions(opts = {}) {
     onUploadFiles = null,
     uploadMimeTypes = DEFAULT_UPLOAD_MIME_TYPES,
     collabExtensions = [],
+    // Page layout: paper size, margins, running headers/footers, page
+    // numbering, forced breaks and the live paginated canvas.
+    page = true,
+    // Seeds `doc.attrs.page` for documents that carry none — this is how a
+    // server-side page setup reaches collaborative sessions, where Yjs syncs
+    // the content but not the doc node's attributes.
+    defaultPage = null,
+    pageGutter = undefined,
+    locale = undefined,
+    onPages = null,
+    labels = {},
     extend = null,
   } = opts
 
@@ -150,6 +165,15 @@ export function buildExtensions(opts = {}) {
     TrailingNode,
     UniqueID.configure({ types: ["heading", "paragraph", "blockquote"] }),
     SelectionPreserve,
+    page && PageSetup.configure({ defaultPage }),
+    page && PageBreak,
+    page &&
+      Pagination.configure({
+        gutter: pageGutter,
+        labels,
+        locale,
+        onPages,
+      }),
     onUploadFiles &&
       FileHandler.configure({
         allowedMimeTypes: uploadMimeTypes,
@@ -163,35 +187,47 @@ export function buildExtensions(opts = {}) {
   return typeof extend === "function" ? extend(exts) : exts
 }
 
-// Uploads each file to `upload.url` as multipart form data and inserts the
-// result into the doc: image for image/*, a video node for video/*, and a
-// download link for everything else.
+// POSTs one file and returns the endpoint's `{url, content_type, filename}`,
+// or null when uploads are blocked because the scope isn't known yet. This is
+// the whole upload wire contract; everything else builds on it.
 //
 // Upload payload contract (frozen):
 //   request:  multipart "file" + optional "<scopeName>" field,
 //             header "x-csrf-token"
 //   response: {"url": ..., "content_type": ..., "filename": ...}
-export async function uploadAndInsert(editor, files, pos, upload) {
+export async function uploadFile(file, upload) {
   if (upload.scopeName != null && !upload.scopeValue) {
-    console.warn(
-      "[Tiptapex] Cannot upload: no upload scope yet (save the record first)."
-    )
-    return
+    console.warn("[Tiptapex] Cannot upload: no upload scope yet (save the record first).")
+    return null
   }
 
+  const form = new FormData()
+  form.append("file", file)
+  if (upload.scopeName != null) form.append(upload.scopeName, upload.scopeValue)
+
+  const resp = await fetch(upload.url, {
+    method: "POST",
+    body: form,
+    headers: { "x-csrf-token": upload.csrfToken },
+    credentials: "same-origin",
+  })
+  if (!resp.ok) throw new Error("Upload failed: " + resp.status)
+
+  const result = await resp.json()
+  // Tell the LiveView (e.g. so an attachments sidebar can refresh).
+  upload.onUploaded?.()
+  return result
+}
+
+// Uploads each file and inserts the result into the doc: image for image/*, a
+// video node for video/*, and a download link for everything else.
+export async function uploadAndInsert(editor, files, pos, upload) {
   for (const file of files) {
     try {
-      const form = new FormData()
-      form.append("file", file)
-      if (upload.scopeName != null) form.append(upload.scopeName, upload.scopeValue)
-      const resp = await fetch(upload.url, {
-        method: "POST",
-        body: form,
-        headers: { "x-csrf-token": upload.csrfToken },
-        credentials: "same-origin",
-      })
-      if (!resp.ok) throw new Error("Upload failed: " + resp.status)
-      const { url, content_type, filename } = await resp.json()
+      const result = await uploadFile(file, upload)
+      if (!result) return
+
+      const { url, content_type, filename } = result
       const cmd = editor.chain().focus()
       if (pos != null) cmd.setTextSelection(pos)
       if (content_type && content_type.startsWith("image/")) {
@@ -211,8 +247,6 @@ export async function uploadAndInsert(editor, files, pos, upload) {
           .insertContent(" ")
           .run()
       }
-      // Tell the LiveView (e.g. so an attachments sidebar can refresh).
-      upload.onUploaded?.()
     } catch (e) {
       console.error("[Tiptapex] upload error", e)
     }
@@ -229,6 +263,11 @@ function readOpts(el) {
     changeEvent: "ttxEventChange" in d ? d.ttxEventChange : DEFAULTS.changeEvent,
     uploadedEvent: "ttxEventUploaded" in d ? d.ttxEventUploaded : DEFAULTS.uploadedEvent,
     setContentEvent: d.ttxSetContentEvent || (el.id ? `tiptapex:set-content:${el.id}` : null),
+    setPageEvent: d.ttxSetPageEvent || (el.id ? `tiptapex:set-page:${el.id}` : null),
+    // null   -> use whatever the document carries
+    // false  -> no page layout, whatever the document says
+    // object -> server-provided page setup, wins over the document
+    page: "ttxPage" in d ? (d.ttxPage === "false" ? false : parseJSON(d.ttxPage, null)) : null,
     inputId: d.ttxInputId || null,
     placeholder: d.ttxPlaceholder || DEFAULTS.placeholder,
     debounceMs: parseInt(d.ttxDebounce || "", 10) || DEFAULTS.debounceMs,
@@ -301,11 +340,33 @@ export function makeEditorHook(staticOpts = {}) {
         ? (editor, files, pos) => uploadAndInsert(editor, files, pos, upload)
         : null
 
+      // Same endpoint, but the result is handed back instead of inserted —
+      // the page dialog uses it for header/footer logos.
+      const uploadImage = upload
+        ? async (file) => {
+            const result = await uploadFile(file, upload)
+            if (result && result.content_type && !result.content_type.startsWith("image/")) {
+              const error = new Error("Not an image: " + result.content_type)
+              error.ttxNotAnImage = true
+              throw error
+            }
+            return result
+          }
+        : null
+
+      // ---- Page layout -----------------------------------------
+      const { doc, page: defaultPage } = resolvePageSetup(opts.doc, opts.page)
+
       const extensionOpts = {
         placeholder: opts.placeholder,
         ...opts.extensions,
         collabExtensions,
         onUploadFiles,
+        defaultPage,
+        labels: opts.labels,
+        // Re-render the footer counter when the page count changes, so
+        // "{pages}" in the count template stays honest.
+        onPages: () => this._updateCount?.(),
         extend: staticOpts.extend,
       }
 
@@ -315,7 +376,7 @@ export function makeEditorHook(staticOpts = {}) {
         element: target,
         // When collaborating, Yjs is the source of truth — never seed content
         // ourselves or we'd duplicate the doc.
-        content: collab ? undefined : opts.doc,
+        content: collab ? undefined : doc,
         autofocus: false,
         extensions: buildExts(extensionOpts),
       })
@@ -327,10 +388,19 @@ export function makeEditorHook(staticOpts = {}) {
       // Y.Doc — a plain setContent gets reverted when the sync plugin
       // re-renders from the Y.Doc.
       const applyContent = (json) => {
+        // Incoming content replaces the whole document, page setup included.
+        // A payload that says nothing about pages keeps the current one
+        // rather than silently un-paginating the editor.
+        let next = json
+        if (json && !(json.attrs && "page" in json.attrs)) {
+          const current = this.editor.state.doc.attrs?.page
+          if (current) next = { ...json, attrs: { ...(json.attrs || {}), page: current } }
+        }
+
         if (collab && staticOpts.collab?.setContent) {
-          staticOpts.collab.setContent(collab, this.editor, json)
+          staticOpts.collab.setContent(collab, this.editor, next)
         } else {
-          this.editor.commands.setContent(json)
+          this.editor.commands.setContent(next)
         }
         // Keep the HTML source view (if showing) in step so a stale
         // textarea doesn't overwrite the pushed content on the next edit.
@@ -343,8 +413,8 @@ export function makeEditorHook(staticOpts = {}) {
       if (collab) {
         this._seedTimer = setTimeout(() => {
           const docEmpty = this.editor.state.doc.textContent === ""
-          if (docEmpty && opts.doc && opts.doc.content) {
-            applyContent(opts.doc)
+          if (docEmpty && doc && doc.content) {
+            applyContent(doc)
           }
         }, 800)
       }
@@ -377,6 +447,7 @@ export function makeEditorHook(staticOpts = {}) {
             uploadFiles: onUploadFiles
               ? (files, pos) => onUploadFiles(this.editor, files, pos)
               : undefined,
+            uploadImage,
           })
         } catch (e) {
           console.error("[Tiptapex] toolbar build failed:", e.message, e.stack)
@@ -400,7 +471,11 @@ export function makeEditorHook(staticOpts = {}) {
         counter.textContent = opts.countTemplate
           .replace("{chars}", chars)
           .replace("{words}", words)
+          .replace("{pages}", this.editor.storage.tiptapexPagination?.pages ?? 1)
       }
+      // The pagination plugin calls back through this when the page count
+      // changes (see the onPages option above).
+      this._updateCount = updateCount
       updateCount()
 
       const inputEl = opts.inputId ? document.getElementById(opts.inputId) : null
@@ -433,6 +508,15 @@ export function makeEditorHook(staticOpts = {}) {
       if (opts.setContentEvent) {
         this.handleEvent(opts.setContentEvent, ({ json }) => {
           if (json) applyContent(json)
+        })
+      }
+
+      // Page setup pushed from the server (Tiptapex.Components.set_page/3) —
+      // handy when the page controls live in the LiveView instead of the
+      // editor's own dialog. `null` turns page layout off.
+      if (opts.setPageEvent) {
+        this.handleEvent(opts.setPageEvent, ({ page }) => {
+          this.editor.commands.setPageOptions(page ?? null)
         })
       }
 

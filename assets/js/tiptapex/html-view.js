@@ -178,12 +178,23 @@ export function attachHtmlView(editor, root, opts = {}) {
   let dirty = false
   let debounce
 
+  // The source view round-trips the *content*. Document-level attributes —
+  // the page setup lives on the `doc` node, which has no DOM representation —
+  // are carried over explicitly, so editing the HTML never silently drops the
+  // page layout.
   const apply = () => {
     dirty = false
+    const json = htmlToJSON(editor, surface.get())
+    const attrs = editor.state.doc.attrs
+
+    if (attrs && Object.keys(attrs).length > 0) {
+      json.attrs = { ...attrs, ...(json.attrs || {}) }
+    }
+
     if (typeof opts.applyJSON === "function") {
-      opts.applyJSON(htmlToJSON(editor, surface.get()))
+      opts.applyJSON(json)
     } else {
-      editor.commands.setContent(surface.get(), { emitUpdate: true })
+      editor.commands.setContent(json, { emitUpdate: true })
     }
   }
 

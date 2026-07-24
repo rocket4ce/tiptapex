@@ -6,6 +6,7 @@ Tiptapex packages a production-grade editor integration as a single Hex package:
 
 - **`<.tiptapex_editor>` / `<.tiptapex_viewer>`** — HEEx function components backed by JS hooks shipped inside this package.
 - **A full-featured editor** — toolbar (marks, headings, alignment, lists, fonts, colors), resizable images and videos (file + YouTube embeds), tables with a floating context menu, task lists, drag-handle block reordering, placeholder, character count, invisible characters, editable HTML source view.
+- **Page layout & PDF** — paper sizes (Letter, Legal, A4…), orientation, margins, running headers/footers with left/centre/right page numbering, forced page breaks, a **live paginated canvas** in the editor, and ready-made options for **`chromic_pdf`** and **`pdf_generator`**.
 - **`Tiptapex.Renderer`** — converts the Tiptap/ProseMirror JSON document to **safe, escaped HTML on the server**. No `raw/1`, no trusting client-generated HTML, no stored-XSS surface.
 - **Uploads** — a `Tiptapex.Upload` behaviour + controller macro with real server-side validation (size limits and magic-byte content-type sniffing).
 - **Realtime collaboration (optional)** — Yjs over Phoenix Channels via `use Tiptapex.Collab.Channel` and a bundled provider; multiple users edit the same doc with live carets.
@@ -20,7 +21,7 @@ The canonical storage format is the **JSON document** (an Ecto `:map` / Postgres
 # mix.exs
 def deps do
   [
-    {:tiptapex, "~> 0.1.1"}
+    {:tiptapex, "~> 0.1.2"}
   ]
 end
 ```
@@ -154,18 +155,22 @@ The hook keeps the input in sync with the document JSON and triggers your form's
 
 | Attr | What it does |
 | --- | --- |
-| `toolbar={[:marks, :blocks, :lists, :history]}` | ordered subset of groups; `false` hides the toolbar |
+| `toolbar={[:marks, :blocks, :lists, :page, :history]}` | ordered subset of groups; `false` hides the toolbar |
+| `page={%{size: :letter}}` | paper size, margins, headers/footers, numbering — see [Page layout](#page-layout-and-pdf-export) |
 | `extensions={%{table: false, character_count_limit: 10_000}}` | per-feature switches for the JS extension matrix |
 | `extensions={%{html_view: false}}` | disables the toolbar's editable HTML source view (`</>` button) |
 | `labels={%{bold: "Negrita", insert_link: "Insertar enlace"}}` | i18n for toolbar/table menu (English defaults) |
 | `remount_key={@editor_session}` | bump to force a client remount (e.g. after restoring a version) |
-| `count_template="{chars} caracteres · {words} palabras"` | footer counter format |
+| `count_template="{chars} caracteres · {words} palabras · {pages} páginas"` | footer counter format |
 | `<:actions>` slot | render buttons in the editor footer |
 
 Push content into a mounted editor from the server (multiple editors are namespaced by id):
 
 ```elixir
 {:noreply, Tiptapex.Components.set_content(socket, "article-body", restored.body)}
+
+# or change only the page setup, leaving the content alone
+{:noreply, Tiptapex.Components.set_page(socket, "article-body", %{orientation: :landscape})}
 ```
 
 ### Displaying documents — the safe way
@@ -197,6 +202,149 @@ The renderer covers every node/mark the editor produces and enforces: URL scheme
 > globally — with duplicate ids it will pull nodes out of the editor (even
 > inside `phx-update="ignore"`), which ProseMirror then interprets as the
 > user deleting them.
+
+### Page layout and PDF export
+
+Give the editor a page setup and it stops being an infinite scroll: it renders
+a stack of real sheets, measured as you type, with the running header and
+footer drawn in the margins of every page.
+
+```heex
+<.tiptapex_editor
+  id="contract"
+  value={@doc}
+  page={%{
+    size: :letter,                                   # :letter :legal :a4 :a5 :tabloid :executive
+    orientation: :portrait,                          # or :landscape
+    margins: %{top: "1in", right: 20, bottom: 20, left: "1in"},
+    header: %{left: "Acme S.A.", center: "", right: "{date}"},
+    footer: %{left: "", center: "", right: ""},
+    numbering: %{enabled: true, region: :footer, align: :center, format: "{page} of {pages}"}
+  }}
+/>
+```
+
+Lengths are millimetres; strings may carry a unit (`"1in"`, `"2cm"`, `"72pt"`,
+`"96px"`). Header/footer slots accept the tokens `{page}`, `{pages}`,
+`{date}`, `{time}` and `{title}` — put `{page}` in whichever slot you want the
+number aligned to, or let `numbering` place it for you.
+
+#### Logos in the header or footer
+
+Any slot can carry an image next to (or instead of) its text:
+
+```elixir
+header: %{
+  left: %{image: %{src: "https://cdn.example.com/logo.png", height: 12}},
+  center: "",
+  right: "{date}"
+}
+```
+
+`:height` is millimetres; the width follows the aspect ratio and the image is
+clamped to the margin it sits in. In the editor the page dialog gives every
+slot a logo field with an **upload button** that posts to the same
+`upload_url` as the rest of the editor and fills in the returned URL — so
+logos go through your existing `Tiptapex.Upload` handler, validation
+included. Without `upload_url` the field still accepts a pasted URL.
+
+`src` must be http(s), a relative path, or a `data:` URI for an image;
+anything else is dropped, the same allow-list the document renderer applies.
+
+#### Formatting the text
+
+Slot text accepts a small HTML subset — `<b>`, `<i>`, `<u>`, `<s>`, `<span
+style="…">`, `<h1>`…`<h6>`, `<p>`, `<div>`, `<a>`, `<img>`, `<br>` and a few
+more:
+
+```elixir
+footer: %{center: ~s(<span style="color: #6b7280">Page <b>{page}</b> of {pages}</span>)}
+```
+
+It is **not** raw HTML: `Tiptapex.Renderer.Markup` tokenises the string,
+checks every tag and attribute against a closed allow-list, and rebuilds the
+output — so nothing from the field is ever emitted verbatim. `style`
+declarations go through the same CSS grammar as document styles, `href` and
+`src` through the same URL allow-lists, and anything unrecognised (a
+`<script>`, an `onclick`, a malformed tag) comes out as visible text rather
+than markup. The editor renders the identical subset client-side with
+`createElement`, never `innerHTML`.
+
+wkhtmltopdf's `--header-left` flags render literally, so a slot with markup
+takes the same `--header-html` route as a logo — `with_pdf_generator/3`
+handles it.
+
+The setup lives **in the document** (`doc.attrs.page`), so it travels with the
+JSON you already persist and the exporter needs nothing else. The toolbar's
+page button opens a setup dialog whose first control — *Paginate this
+document* — is what turns page layout on and off; `page={...}` on the
+component overrides whatever the document carries, and `page={false}` forces
+the classic continuous editor.
+
+Users insert a forced break with the toolbar or `Cmd/Ctrl+Shift+Enter`.
+
+> #### Collaborative editors: pass `page` explicitly {: .warning}
+>
+> Yjs syncs the document's *content*, not the `doc` node's attributes — so a
+> page setup changed by one peer does not reach the others. Pass `page={...}`
+> from the server (and push changes with `Tiptapex.Components.set_page/3`) so
+> everyone renders the same paper.
+
+#### Exporting
+
+`Tiptapex.Export.PDF` builds the print-ready HTML and the exact options each
+engine needs. It shells out to nothing and adds no dependency — you call the
+engine.
+
+```elixir
+# ChromicPDF
+{source, opts} = Tiptapex.Export.PDF.chromic_pdf(article.body)
+ChromicPDF.print_to_pdf(source, opts ++ [output: "article.pdf"])
+
+# pdf_generator (wkhtmltopdf)
+{html, opts} = Tiptapex.Export.PDF.pdf_generator(article.body)
+{:ok, path} = PdfGenerator.generate(html, opts)
+
+# anything else — browser print, WeasyPrint, Gotenberg…
+html = Tiptapex.Export.PDF.to_html(article.body)
+```
+
+Both engines draw the running header/footer themselves — the only way to get
+a correct `{pages}` total — and the three slots map straight onto their native
+features:
+
+| Token | ChromicPDF (Chrome) | pdf_generator (wkhtmltopdf) |
+| --- | --- | --- |
+| `{page}` | `<span class="pageNumber">` | `[page]` |
+| `{pages}` | `<span class="totalPages">` | `[topage]` |
+| `{date}` | `<span class="date">` | `[date]` |
+| `{title}` | `<span class="title">` | `[title]` |
+
+Pass `tokens: %{"date" => "24/07/2026"}` to substitute one yourself.
+
+Two things to know about logos when exporting:
+
+- **Chrome resolves no relative URLs** in a running header, so give the logo
+  an absolute URL or pass `asset_url: &absolutise/1` to rewrite it (inlining
+  it as a `data:` URI works well).
+- **wkhtmltopdf cannot put an image in `--header-left`.** A region with a logo
+  needs `--header-html`, so use `with_pdf_generator/3`, which writes those
+  files and cleans them up:
+
+  ```elixir
+  Tiptapex.Export.PDF.with_pdf_generator(doc, [], &PdfGenerator.generate/2)
+  ```
+
+  Plain `pdf_generator/2` still works — it exports the text and logs that it
+  dropped the logo.
+
+The exported HTML inlines this package's stylesheet and repeats the paged
+editor's margin model, so what you see in the editor is what the engine
+paginates. A read-only preview works too:
+
+```heex
+<.tiptapex_viewer id="preview" value={@doc} />
+```
 
 ### Uploads
 
@@ -331,8 +479,21 @@ mix test
 # demo app
 cd dev/assets && npm install && cd ../..
 mix dev.assets            # bundle the demo JS
+mix js.test               # pure-logic JS checks (page maths, pagination)
 iex -S mix dev            # http://localhost:4400 (two tabs → collaboration)
 ```
+
+The demo exports real PDFs through both engines, which is how the option
+builders above get exercised end to end:
+
+| Route | What it does |
+| --- | --- |
+| `/print` | the print-ready HTML `Tiptapex.Export.PDF.to_html/2` builds |
+| `/print/chromic` | a PDF via `ChromicPDF` — needs Chrome/Chromium installed |
+| `/print/wkhtmltopdf` | a PDF via `pdf_generator` — needs `wkhtmltopdf` on PATH |
+
+Both engines are `only: :dev` dependencies of this repo, never of the
+package. The demo boots without either; the route reports what is missing.
 
 ## License
 

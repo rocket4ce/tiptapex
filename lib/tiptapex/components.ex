@@ -96,7 +96,21 @@ defmodule Tiptapex.Components do
     %{html_view: false} disables the editable HTML source view.
     """
 
-  attr :labels, :map, default: nil, doc: "i18n label overrides for toolbar and table menu"
+  attr :labels, :map,
+    default: nil,
+    doc: "i18n label overrides for the toolbar, table menu and page dialog"
+
+  attr :page, :any,
+    default: nil,
+    doc: """
+    page layout — paper size, orientation, margins, running headers/footers
+    and page numbering. `nil` (the default) uses whatever the document
+    carries in `attrs.page`; `false` forces a continuous, unpaginated
+    editor; `true` or a map (see `Tiptapex.Page`) forces this setup on the
+    document, overriding what it carries. **Pass it explicitly in
+    collaborative editors** — Yjs syncs the content but not the document
+    node's attributes, so peers would otherwise each keep their own.
+    """
 
   attr :remount_key, :any,
     default: nil,
@@ -147,6 +161,8 @@ defmodule Tiptapex.Components do
       class={["ttx-editor", @class]}
       data-ttx-doc={Jason.encode!(@doc)}
       data-ttx-set-content-event={"tiptapex:set-content:" <> @id}
+      data-ttx-set-page-event={"tiptapex:set-page:" <> @id}
+      data-ttx-page={encode_page(@page)}
       data-ttx-placeholder={@placeholder}
       data-ttx-debounce={@debounce}
       data-ttx-count-template={@count_template}
@@ -195,6 +211,15 @@ defmodule Tiptapex.Components do
   attr :hydrate, :boolean, default: true
   attr :class, :any, default: nil
   attr :renderer, :list, default: [], doc: "options forwarded to Tiptapex.Renderer.to_html/2"
+
+  attr :page, :any,
+    default: nil,
+    doc: """
+    page layout, as in `tiptapex_editor/1`. A document with a page setup is
+    rendered as a stack of sheets when hydrated; the server-rendered
+    fallback gets the paper's width and margins but no page breaks.
+    """
+
   attr :rest, :global
 
   def tiptapex_viewer(%{hydrate: true, id: nil}) do
@@ -202,6 +227,8 @@ defmodule Tiptapex.Components do
   end
 
   def tiptapex_viewer(%{hydrate: true} = assigns) do
+    assigns = assign(assigns, :sheet, sheet(assigns.page, assigns.value))
+
     ~H"""
     <div
       id={@id}
@@ -209,9 +236,10 @@ defmodule Tiptapex.Components do
       phx-update="ignore"
       class={["ttx-viewer", @class]}
       data-ttx-doc={Jason.encode!(@value || Tiptapex.empty_doc())}
+      data-ttx-page={encode_page(@page)}
       {@rest}
     >
-      <div data-ttx-role="fallback" class="ttx-prose">
+      <div data-ttx-role="fallback" class={["ttx-prose" | List.wrap(@sheet.class)]} {@sheet.attrs}>
         {Tiptapex.Renderer.to_html(@value, @renderer)}
       </div>
       <div data-ttx-role="viewer-target"></div>
@@ -220,8 +248,15 @@ defmodule Tiptapex.Components do
   end
 
   def tiptapex_viewer(assigns) do
+    assigns = assign(assigns, :sheet, sheet(assigns.page, assigns.value))
+
     ~H"""
-    <div id={@id} class={["ttx-viewer ttx-prose", @class]} {@rest}>
+    <div
+      id={@id}
+      class={["ttx-viewer ttx-prose" | List.wrap(@sheet.class)] ++ [@class]}
+      {@sheet.attrs}
+      {@rest}
+    >
       {Tiptapex.Renderer.to_html(@value, @renderer)}
     </div>
     """
@@ -239,8 +274,64 @@ defmodule Tiptapex.Components do
     Phoenix.LiveView.push_event(socket, "tiptapex:set-content:" <> id, %{json: doc})
   end
 
+  @doc """
+  Pushes a new page setup into a mounted editor, leaving the content alone.
+
+      {:noreply, Tiptapex.Components.set_page(socket, "body", %{size: :legal})}
+
+  Useful when the page controls live in your LiveView rather than in the
+  editor's own dialog — and the way to keep collaborators in step, since
+  Yjs does not sync document-level attributes. Pass `nil` (or `false`) to
+  turn page layout off.
+  """
+  def set_page(socket, id, page) when is_binary(id) do
+    payload =
+      if page in [nil, false], do: nil, else: Tiptapex.Page.to_map(Tiptapex.Page.new(page))
+
+    Phoenix.LiveView.push_event(socket, "tiptapex:set-page:" <> id, %{page: payload})
+  end
+
   defp dom_id(id, nil), do: id
   defp dom_id(id, remount_key), do: "#{id}-#{remount_key}"
+
+  # nil -> attribute omitted (the document decides); false -> explicitly off.
+  defp encode_page(nil), do: nil
+  defp encode_page(false), do: "false"
+
+  defp encode_page(page),
+    do: page |> Tiptapex.Page.new() |> Tiptapex.Page.to_map() |> Jason.encode!()
+
+  # Paper geometry for server-rendered HTML: the sheet's width and margins,
+  # as the same CSS custom properties the pagination plugin sets. No page
+  # breaks — those need measurement, which only the client can do.
+  defp sheet(page_attr, doc) do
+    case Tiptapex.Page.from_doc(doc, page_attr) do
+      nil ->
+        %{class: nil, attrs: []}
+
+      page ->
+        %{width: width} = Tiptapex.Page.dimensions(page)
+        m = page.margins
+
+        style =
+          Enum.map_join(
+            [
+              {"--ttx-page-w", width},
+              {"--ttx-page-mt", m.top},
+              {"--ttx-page-mr", m.right},
+              {"--ttx-page-mb", m.bottom},
+              {"--ttx-page-ml", m.left}
+            ],
+            " ",
+            fn {property, mm} -> "#{property}: #{css_px(mm)}px;" end
+          )
+
+        %{class: "ttx-sheet", attrs: [style: style]}
+    end
+  end
+
+  # Millimetres to CSS reference pixels (96 dpi).
+  defp css_px(mm), do: mm |> Kernel.*(96 / 25.4) |> Float.round(2)
 
   defp doc_value(nil, %Phoenix.HTML.FormField{} = field) do
     case field.value do

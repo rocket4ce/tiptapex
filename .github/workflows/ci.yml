@@ -57,3 +57,6 @@ jobs:
       # Bundling the demo app proves the ESM entry points compile and every
       # export resolves against the installed @tiptap peers.
       - run: mix dev.assets
+      # Pure-logic JS checks: page normalisation (must agree with
+      # Tiptapex.Page) and the pagination maths.
+      - run: mix js.test

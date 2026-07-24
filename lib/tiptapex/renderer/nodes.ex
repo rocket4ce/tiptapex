@@ -144,6 +144,22 @@ defmodule Tiptapex.Renderer.Nodes do
 
   def render("horizontalRule", _node, _children, _opts), do: {:ok, HTML.void_tag("hr", [])}
 
+  # A forced page break. The inline style keeps it working in bare HTML
+  # (browser print, a PDF engine with no stylesheet); the class is what the
+  # packaged stylesheet and `Tiptapex.Export.PDF` style.
+  def render("pageBreak", _node, _children, _opts) do
+    {:ok,
+     HTML.tag(
+       "div",
+       [
+         {"data-page-break", "true"},
+         {"class", "ttx-page-break"},
+         {"style", "break-after: page; page-break-after: always;"}
+       ],
+       []
+     )}
+  end
+
   def render("hardBreak", _node, _children, _opts), do: {:ok, HTML.void_tag("br", [])}
 
   def render(_type, _node, _children, _opts), do: :unknown

@@ -25,4 +25,5 @@ tiptapex-*.tar
 # Dev/demo app artifacts.
 /priv/static/dev/
 /dev/assets/node_modules/
+/dev/assets/tmp/
 

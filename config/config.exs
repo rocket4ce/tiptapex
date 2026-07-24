@@ -27,5 +27,33 @@ if config_env() == :dev do
             ":"
           )
       }
+    ],
+    # `mix js.test` — bundles test/js with the same resolution rules a host
+    # app uses, then runs it with node.
+    js_test: [
+      args: ~w(
+        ../../test/js/index.mjs
+        --bundle
+        --platform=node
+        --format=esm
+        --outfile=tmp/js_test.mjs
+        --external:jsdom
+        --alias:tiptapex=../../assets/js/tiptapex/index.js
+        --alias:tiptapex/page=../../assets/js/tiptapex/page.js
+        --alias:tiptapex/pagination=../../assets/js/tiptapex/pagination.js
+        --alias:tiptapex/markup=../../assets/js/tiptapex/markup.js
+        --alias:tiptapex/url=../../assets/js/tiptapex/url.js
+      ),
+      cd: Path.expand("../dev/assets", __DIR__),
+      env: %{
+        "NODE_PATH" =>
+          Enum.join(
+            [
+              Path.expand("../dev/assets/node_modules", __DIR__),
+              Path.expand("../deps", __DIR__)
+            ],
+            ":"
+          )
+      }
     ]
 end

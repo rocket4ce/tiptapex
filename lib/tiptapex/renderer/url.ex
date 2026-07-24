@@ -9,6 +9,7 @@ defmodule Tiptapex.Renderer.URL do
   """
 
   @allowed_schemes ~w(http https mailto)
+  @data_image ~r{^data:image/(png|jpe?g|gif|webp|svg\+xml)[;,]}i
 
   @doc """
   Validates a user-supplied URL for href/src attributes.
@@ -40,6 +41,29 @@ defmodule Tiptapex.Renderer.URL do
         if String.downcase(scheme) in @allowed_schemes, do: {:ok, url}, else: :error
     end
   end
+
+  @doc """
+  Validates a URL for an `img` `src`.
+
+  Everything `safe_url/1` accepts, plus `data:` URIs for images — which
+  `safe_url/1` rejects (a `data:` link is a navigation vector, but a `data:`
+  image is inert, and it is the only src Chrome can resolve inside a PDF
+  running header). SVG is included: an SVG loaded through `<img>` cannot run
+  scripts, which is the only way these are ever rendered.
+  """
+  @spec safe_image_url(term()) :: {:ok, binary()} | :error
+  def safe_image_url(url) when is_binary(url) do
+    trimmed = String.trim(url)
+
+    cond do
+      trimmed == "" -> :error
+      String.match?(trimmed, ~r/[\x00-\x1f\x7f]/) -> :error
+      Regex.match?(@data_image, trimmed) -> {:ok, trimmed}
+      true -> safe_url(trimmed)
+    end
+  end
+
+  def safe_image_url(_), do: :error
 
   @doc """
   Normalizes any of the common YouTube URL shapes to the canonical embed

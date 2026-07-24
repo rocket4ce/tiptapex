@@ -39,5 +39,8 @@
     "y-prosemirror": "^1.2.12",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }

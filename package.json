@@ -1,6 +1,6 @@
 {
   "name": "tiptapex",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tiptap v3 rich-text editor hooks and components for Phoenix LiveView. Shipped as raw ESM inside the tiptapex Hex package; install the @tiptap/* peer dependencies in your host app.",
   "license": "MIT",
   "type": "module",

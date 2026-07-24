@@ -5,8 +5,11 @@
 #     iex -S mix dev        # then open http://localhost:4400
 #
 # Routes:
-#   /        — full editor demo (uploads to local disk, collab enabled)
-#   /viewer  — server-rendered + hydrated viewer of the last edited doc
+#   /                      — full editor demo (uploads to local disk, collab on)
+#   /viewer                — server-rendered + hydrated viewer of the doc
+#   /print                 — the print-ready HTML Tiptapex.Export.PDF builds
+#   /print/chromic         — a real PDF via ChromicPDF (headless Chrome)
+#   /print/wkhtmltopdf     — a real PDF via pdf_generator (wkhtmltopdf)
 #
 # Open / in two browser tabs to watch realtime collaboration.
 
@@ -26,6 +29,19 @@ Application.put_env(:tiptapex, Tiptapex.Upload.LocalDisk,
   url_prefix: "/uploads"
 )
 
+if path = System.find_executable("wkhtmltopdf") do
+  Application.put_env(:pdf_generator, :wkhtml_path, path)
+end
+
+# ChromicPDF drives a headless Chrome, so it is only supervised when there is
+# one to drive — the demo still boots (and /print/wkhtmltopdf still works) on
+# a machine without Chrome.
+chrome? =
+  Enum.any?(
+    ~w(chromium chromium-browser google-chrome google-chrome-stable),
+    &System.find_executable/1
+  ) or File.exists?("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+
 {:ok, sup} =
   Supervisor.start_link(
     [
@@ -36,9 +52,13 @@ Application.put_env(:tiptapex, Tiptapex.Upload.LocalDisk,
         start: {Agent, :start_link, [fn -> nil end, [name: Tiptapex.DevDoc]]}
       },
       Tiptapex.DevWeb.Endpoint
-    ],
+    ] ++ if(chrome?, do: [ChromicPDF], else: []),
     strategy: :one_for_one
   )
+
+unless chrome? do
+  IO.puts("(no Chrome found — /print/chromic is disabled, /print/wkhtmltopdf still works)")
+end
 
 # Under `iex -S mix dev` this script's process exits as soon as the file
 # finishes evaluating, and a linked supervisor (supervisors trap exits and

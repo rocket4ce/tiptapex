@@ -16,6 +16,8 @@
 //     custom: [{ icon: () => Node, title, run, activeWhen }], // extra buttons
 //   })
 
+import { openPageDialog, DEFAULT_PAGE_LABELS } from "./page-dialog"
+
 export const DEFAULT_TEXT_SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "32px"]
 export const DEFAULT_TEXT_COLORS = ["#111111", "#374151", "#6b7280", "#dc2626", "#ea580c", "#f59e0b", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#db2777"]
 export const DEFAULT_HIGHLIGHTS = ["#fef3c7", "#dcfce7", "#dbeafe", "#fae8ff", "#fee2e2", "#fed7aa", "#cffafe"]
@@ -35,11 +37,15 @@ export const DEFAULT_GROUPS = [
   "colors",
   "insert",
   "utilities",
+  "page",
   "history",
   "html",
 ]
 
 export const DEFAULT_LABELS = {
+  // Page setup shares this map so hosts have a single place to translate
+  // the toolbar, the table menu and the page dialog.
+  ...DEFAULT_PAGE_LABELS,
   bold: "Bold (Cmd/Ctrl+B)",
   italic: "Italic (Cmd/Ctrl+I)",
   strike: "Strikethrough",
@@ -77,6 +83,7 @@ export const DEFAULT_LABELS = {
   undo: "Undo (Cmd/Ctrl+Z)",
   redo: "Redo (Cmd/Ctrl+Shift+Z)",
   htmlView: "Edit HTML source",
+  insertPageBreak: "Insert page break (Cmd/Ctrl+Shift+Enter)",
 }
 
 // SVG icon helper — uses Heroicons mini paths inline.
@@ -140,6 +147,19 @@ export const ICONS = {
     ]),
   // Angle brackets with a slash — "edit the HTML source"
   htmlSource: () => icon(["M6 6L2.5 10L6 14", "M14 6L17.5 10L14 14", "M11.5 4.5l-3 11"]),
+  // A sheet with header and footer rules — "page setup"
+  pageSetup: () => icon(["M4 2.5h12v15H4z", "M6.5 5.5h7", "M6.5 14.5h7", "M6.5 9h5"]),
+  // Content split by a dashed rule, arrows pushing it apart — "page break"
+  pageBreak: () =>
+    icon([
+      "M3 10h2.5",
+      "M8 10h4",
+      "M14.5 10h2.5",
+      "M10 2.5v3.5",
+      "M8.2 4.3L10 2.5l1.8 1.8",
+      "M10 17.5V14",
+      "M8.2 15.7L10 17.5l1.8-1.8",
+    ]),
   // YouTube-style play button inside a rounded rect
   youtube: () =>
     icon(
@@ -485,6 +505,26 @@ const GROUPS = {
     ])
   },
 
+  // Document-level page layout. Opts out entirely when the editor was built
+  // without the page extensions (extensions: %{page: false}).
+  page(editor, t, config) {
+    if (typeof editor.commands.setPageOptions !== "function") return null
+
+    return group([
+      btn(ICONS.pageSetup(), {
+        title: t.pageSetup,
+        editor,
+        run: () => openPageDialog(editor, { labels: t, uploadImage: config.uploadImage }),
+        activeWhen: () => !!editor.state.doc.attrs?.page,
+      }),
+      typeof editor.commands.setPageBreak === "function" &&
+        btn(ICONS.pageBreak(), {
+          title: t.insertPageBreak,
+          run: () => editor.chain().focus().setPageBreak().run(),
+        }),
+    ])
+  },
+
   history(editor, t) {
     return group([
       btn(ICONS.undo(), { title: t.undo, run: () => editor.chain().focus().undo().run() }),
@@ -521,6 +561,7 @@ export function buildToolbar(editor, root, config = {}) {
     fontFamilies: config.fontFamilies || DEFAULT_FONT_FAMILIES,
     lineHeights: config.lineHeights || DEFAULT_LINE_HEIGHTS,
     uploadFiles: config.uploadFiles,
+    uploadImage: config.uploadImage,
     htmlView: config.htmlView,
     custom: config.custom || [],
   }

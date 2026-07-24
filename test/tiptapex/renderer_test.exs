@@ -165,6 +165,17 @@ defmodule Tiptapex.RendererTest do
       assert html(doc(%{"type" => "horizontalRule"})) == "<hr>"
       assert html(doc(p(%{"type" => "hardBreak"}))) == "<p><br></p>"
     end
+
+    test "page break carries the CSS break inline so it works without a stylesheet" do
+      assert html(doc(%{"type" => "pageBreak"})) ==
+               ~s(<div data-page-break="true" class="ttx-page-break" ) <>
+                 ~s(style="break-after: page; page-break-after: always;"></div>)
+    end
+
+    test "page breaks are not content — a document of breaks is still blank" do
+      assert Tiptapex.blank_doc?(doc(%{"type" => "pageBreak"}))
+      assert Tiptapex.Renderer.to_plain_text(doc(%{"type" => "pageBreak"})) == ""
+    end
   end
 
   describe "media nodes" do

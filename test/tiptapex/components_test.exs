@@ -14,6 +14,10 @@ defmodule Tiptapex.ComponentsTest do
     render_component(&Components.tiptapex_viewer/1, assigns)
   end
 
+  defp pushed_events(socket) do
+    Enum.reverse(socket.private.live_temp[:push_events] || [])
+  end
+
   defp attr!(html, selector, name) do
     case html |> Floki.parse_fragment!() |> Floki.attribute(selector, name) do
       [value] -> value
@@ -188,6 +192,82 @@ defmodule Tiptapex.ComponentsTest do
       html = viewer(value: doc, hydrate: false)
       refute html =~ "<img"
       assert html =~ "&lt;img"
+    end
+  end
+
+  describe "page layout" do
+    @page_doc %{
+      "type" => "doc",
+      "content" => [
+        %{"type" => "paragraph", "content" => [%{"type" => "text", "text" => "Hello page"}]}
+      ]
+    }
+
+    test "no page attribute means the document decides" do
+      refute editor(id: "e") =~ "data-ttx-page"
+    end
+
+    test "a map is normalised into the wire shape" do
+      html = editor(id: "e", page: %{size: :legal, margins: %{top: "1in"}})
+      page = Jason.decode!(attr!(html, "div#e", "data-ttx-page"))
+
+      assert page["size"] == "legal"
+      assert page["orientation"] == "portrait"
+      assert page["margins"]["top"] == 25.4
+      assert page["numbering"]["format"] == "{page}"
+    end
+
+    test "true means defaults, false means explicitly unpaginated" do
+      assert Jason.decode!(attr!(editor(id: "e", page: true), "div#e", "data-ttx-page"))["size"] ==
+               "letter"
+
+      assert attr!(editor(id: "e", page: false), "div#e", "data-ttx-page") == "false"
+    end
+
+    test "the editor exposes a per-id set-page event" do
+      assert attr!(editor(id: "ed"), "div#ed", "data-ttx-set-page-event") ==
+               "tiptapex:set-page:ed"
+    end
+
+    test "set_page/3 pushes the normalised setup, and nil turns it off" do
+      socket = %Phoenix.LiveView.Socket{private: %{live_temp: %{}}}
+
+      assert [["tiptapex:set-page:ed", %{page: page}]] =
+               socket |> Components.set_page("ed", %{size: :a4}) |> pushed_events()
+
+      assert page["size"] == "a4"
+
+      assert [["tiptapex:set-page:ed", %{page: nil}]] =
+               socket |> Components.set_page("ed", nil) |> pushed_events()
+    end
+
+    test "the viewer renders the paper geometry into the server-rendered sheet" do
+      html = viewer(id: "v", value: @page_doc, page: %{size: :letter})
+      style = attr!(html, "[data-ttx-role=fallback]", "style")
+
+      assert attr!(html, "[data-ttx-role=fallback]", "class") == "ttx-prose ttx-sheet"
+      assert style =~ "--ttx-page-w: 816.0px;"
+      assert style =~ "--ttx-page-mt: 96.0px;"
+    end
+
+    test "a document carrying its own page setup styles the sheet with no page attribute" do
+      html = viewer(id: "v", value: Tiptapex.Page.put(@page_doc, %{size: :a4}), hydrate: false)
+
+      assert attr!(html, "div#v", "class") =~ "ttx-sheet"
+      assert attr!(html, "div#v", "style") =~ "--ttx-page-w: 793.7px;"
+    end
+
+    test "page={false} on the viewer keeps the plain prose rendering" do
+      html =
+        viewer(
+          id: "v",
+          value: Tiptapex.Page.put(@page_doc, %{size: :a4}),
+          hydrate: false,
+          page: false
+        )
+
+      refute attr!(html, "div#v", "class") =~ "ttx-sheet"
+      refute html =~ "--ttx-page-w"
     end
   end
 end

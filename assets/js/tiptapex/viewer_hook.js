@@ -26,9 +26,15 @@ import { Video } from "./extensions/video"
 import { FontSize } from "./extensions/font-size"
 import { LineHeight } from "./extensions/line-height"
 import { BackgroundColor } from "./extensions/background-color"
+import { PageSetup } from "./extensions/page-setup"
+import { PageBreak } from "./extensions/page-break"
+import { Pagination } from "./pagination"
+import { resolvePageSetup } from "./page"
 import { parseJSON } from "./config"
 
 export function buildViewerExtensions(opts = {}) {
+  const { page = true, defaultPage = null, pageGutter = undefined, locale = undefined } = opts
+
   const exts = [
     // StarterKit v3 bundles Link; we add our own configured copy below.
     StarterKit.configure({ link: false }),
@@ -56,7 +62,14 @@ export function buildViewerExtensions(opts = {}) {
     CharacterCount,
     UniqueID.configure({ types: ["heading", "paragraph", "blockquote"] }),
     Video,
-  ]
+    // A document with a page setup renders paginated here too — same
+    // measuring plugin as the editor, so a preview matches what the editor
+    // (and the PDF) will show.
+    PageBreak,
+    page && PageSetup.configure({ defaultPage }),
+    page && Pagination.configure({ gutter: pageGutter, locale }),
+  ].filter(Boolean)
+
   return typeof opts.extend === "function" ? opts.extend(exts) : exts
 }
 
@@ -70,11 +83,15 @@ export function makeViewerHook(staticOpts = {}) {
         return
       }
 
+      const raw = this.el.dataset.ttxPage
+      const pageAttr = "ttxPage" in this.el.dataset ? (raw === "false" ? false : parseJSON(raw, null)) : null
+      const { doc, page } = resolvePageSetup(json, pageAttr)
+
       this.editor = new Editor({
         element: target,
         editable: false,
-        content: json,
-        extensions: buildViewerExtensions(staticOpts),
+        content: doc,
+        extensions: buildViewerExtensions({ defaultPage: page, ...staticOpts }),
       })
 
       this.el.tiptapexEditor = this.editor

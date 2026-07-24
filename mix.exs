@@ -1,7 +1,7 @@
 defmodule Tiptapex.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
   @source_url "https://github.com/rocket4ce/tiptapex"
 
   def project do
@@ -15,8 +15,9 @@ defmodule Tiptapex.MixProject do
       name: "Tiptapex",
       description:
         "Tiptap v3 rich-text editor for Phoenix LiveView: HEEx components, " <>
-          "safe server-side JSON-to-HTML rendering, uploads, and optional " <>
-          "realtime collaboration over Phoenix Channels.",
+          "safe server-side JSON-to-HTML rendering, page layout with running " <>
+          "headers/footers and PDF export (ChromicPDF / pdf_generator), " <>
+          "uploads, and optional realtime collaboration over Phoenix Channels.",
       package: package(),
       docs: docs(),
       aliases: aliases()
@@ -43,6 +44,11 @@ defmodule Tiptapex.MixProject do
       {:ecto, "~> 3.10", optional: true},
       # Dev/test only
       {:bandit, "~> 1.5", only: :dev},
+      # The demo app exports real PDFs through both supported engines, which
+      # is how the Tiptapex.Export.PDF option builders get exercised
+      # end-to-end. Neither is a dependency of the library itself.
+      {:chromic_pdf, "~> 1.17", only: :dev},
+      {:pdf_generator, "~> 0.6", only: :dev},
       {:esbuild, "~> 0.8", only: :dev, runtime: false},
       {:floki, ">= 0.36.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
@@ -72,8 +78,13 @@ defmodule Tiptapex.MixProject do
           Tiptapex.Renderer.Node,
           Tiptapex.Renderer.Nodes,
           Tiptapex.Renderer.Marks,
+          Tiptapex.Renderer.Markup,
           Tiptapex.Renderer.HTML,
           Tiptapex.Renderer.URL
+        ],
+        Pages: [
+          Tiptapex.Page,
+          Tiptapex.Export.PDF
         ],
         Uploads: [
           Tiptapex.Upload,
@@ -96,6 +107,11 @@ defmodule Tiptapex.MixProject do
         # priv/static/tiptapex.css is the served + Hex-packaged copy of the
         # stylesheet; keep it in step with the source in assets/css.
         "cmd cp assets/css/tiptapex.css priv/static/tiptapex.css"
+      ],
+      "js.test": [
+        "esbuild.install --if-missing",
+        "esbuild js_test",
+        "cmd node dev/assets/tmp/js_test.mjs"
       ]
     ]
   end

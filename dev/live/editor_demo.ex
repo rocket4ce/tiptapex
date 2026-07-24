@@ -4,8 +4,27 @@ defmodule Tiptapex.DevWeb.EditorDemoLive do
 
   import Tiptapex.Components
 
+  # Page setup lives in the document itself, so the demo doc opens paginated
+  # and `/print` exports it without being told anything else.
+  # A data: URI so the demo needs no asset on disk — and so it exercises the
+  # one src shape Chrome can always resolve in a running header. Upload a real
+  # logo through the page dialog to replace it.
+  @logo "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMzIiIGhlaWdodD0iMzYiIHZpZXdCb3g9IjAgMCAxMzIgMzYiPjxyZWN0IHdpZHRoPSIxMzIiIGhlaWdodD0iMzYiIHJ4PSI2IiBmaWxsPSIjN2MzYWVkIi8+PHRleHQgeD0iNjYiIHk9IjI0IiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlRpcHRhcGV4PC90ZXh0Pjwvc3ZnPg=="
+
+  @page %{
+    size: :letter,
+    margins: %{top: 20, right: 20, bottom: 20, left: 20},
+    header: %{
+      left: %{text: "", image: %{src: @logo, height: 9}},
+      center: "",
+      right: ~s(<span style="color: #6b7280">{date}</span>)
+    },
+    numbering: %{enabled: true, region: :footer, align: :center, format: "{page} / {pages}"}
+  }
+
   @sample %{
     "type" => "doc",
+    "attrs" => %{"page" => Tiptapex.Page.to_map(Tiptapex.Page.new(@page))},
     "content" => [
       %{
         "type" => "heading",
@@ -30,6 +49,9 @@ defmodule Tiptapex.DevWeb.EditorDemoLive do
     ]
   }
 
+  @doc false
+  def sample_doc, do: @sample
+
   @impl true
   def mount(_params, _session, socket) do
     doc = Agent.get(Tiptapex.DevDoc, & &1) || @sample
@@ -50,6 +72,13 @@ defmodule Tiptapex.DevWeb.EditorDemoLive do
 
   def handle_event("uploaded", _params, socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("landscape", _params, socket) do
+    page = Tiptapex.Page.from_doc(socket.assigns.doc, true)
+    flipped = if page.orientation == :landscape, do: :portrait, else: :landscape
+
+    {:noreply, Tiptapex.Components.set_page(socket, "demo", %{page | orientation: flipped})}
   end
 
   def handle_event("reset", _params, socket) do
@@ -74,9 +103,11 @@ defmodule Tiptapex.DevWeb.EditorDemoLive do
           collab={%{topic: "doc:demo", socket_path: "/socket", user: @collab_user}}
           on_change="editor_update"
           on_uploaded="uploaded"
+          count_template="{chars} characters · {words} words · {pages} pages"
         >
           <:actions>
             <button phx-click="reset" style="cursor: pointer;">Reset content</button>
+            <button phx-click="landscape" style="cursor: pointer;">Toggle orientation</button>
           </:actions>
         </.tiptapex_editor>
       </div>

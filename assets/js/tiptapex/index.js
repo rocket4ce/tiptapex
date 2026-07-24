@@ -24,6 +24,7 @@ export {
   makeEditorHook,
   buildExtensions,
   uploadAndInsert,
+  uploadFile,
   DEFAULT_UPLOAD_MIME_TYPES,
 } from "./editor_hook"
 
@@ -52,6 +53,29 @@ export { LineHeight } from "./extensions/line-height"
 export { BackgroundColor } from "./extensions/background-color"
 export { TrailingNode } from "./extensions/trailing-node"
 export { SelectionPreserve } from "./extensions/selection-preserve"
+export { PageSetup, pageOf } from "./extensions/page-setup"
+export { PageBreak } from "./extensions/page-break"
+
+export { Pagination, computeBreaks, paginationKey, DEFAULT_PAGINATION_LABELS } from "./pagination"
+export { openPageDialog, DEFAULT_PAGE_LABELS } from "./page-dialog"
+export {
+  PAGE_PRESETS,
+  defaultPage,
+  normalizePage,
+  mergePage,
+  pageDimensions,
+  pageGeometry,
+  pageSlots,
+  runningKey,
+  regionUsed,
+  replaceTokens,
+  resolvePageSetup,
+  mmToPx,
+  pxToMm,
+} from "./page"
+
+export { renderMarkup, hasMarkup, ALLOWED_TAGS } from "./markup"
+export { safeUrl, safeImageUrl, safeCssValue } from "./url"
 
 export { DEFAULTS, EMPTY_DOC, ATTACHMENT_MIME } from "./config"
 
