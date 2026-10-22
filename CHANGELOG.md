@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Upload start and error events.** `on_upload_start` and `on_upload_error`
+  on `<.tiptapex_editor>` push an event to the LiveView as each upload starts
+  (`filename`) and when one fails (`filename`, `status`, `error`), so the host
+  can show progress and a message instead of the failure ending in the
+  console. `status` is nil when the request got no answer; `error` is the
+  `error` field of a JSON error response (the upload controller's 422 code),
+  `"no_scope"` when the record has no scope yet (sent without a start event,
+  as no request is made), or nil. Both are off unless set. The page dialog's
+  logo upload keeps reporting its own failures and does not send them. `uploadFile` takes matching `onStart`/`onError`
+  callbacks for hosts that drive it directly.
+- **Client-side upload size limit.** `upload_max_bytes` on
+  `<.tiptapex_editor>` refuses a larger file in the browser, before the
+  request, and reports it through `on_upload_error` as `"too_large"` (no
+  start event). Behind a proxy that buffers the request body, the server's
+  rejection only arrived once the whole file had been sent. Off unless set.
+
+### Fixed
+
+- **Pasting from Word, Excel or a browser no longer adds a picture of the
+  paste.** These put a rendering of the copied content on the clipboard next
+  to its HTML, and the editor uploaded it as well as pasting the HTML. When
+  the HTML has visible text it is pasted alone, through ProseMirror's normal
+  paste; when it holds only an image ("Copy image") the file is uploaded and
+  the HTML's copy is left out.
+
 ## [0.1.2] - 2026-07-24
 
 ### Added

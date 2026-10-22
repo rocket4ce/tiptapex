@@ -151,11 +151,11 @@ function imageControls(t, image, ctx) {
 
       try {
         const result = await ctx.uploadImage(file)
-        if (result?.url) {
-          src.value = result.url
-          alt = result.filename || ""
-          sync()
-        }
+        // No result: the upload was refused before it was sent (too large, no scope).
+        if (!result?.url) throw new Error("Upload returned no file")
+        src.value = result.url
+        alt = result.filename || ""
+        sync()
       } catch (error) {
         console.error("[Tiptapex] logo upload failed:", error)
         window.alert(error?.ttxNotAnImage ? t.notAnImage : t.uploadFailed)

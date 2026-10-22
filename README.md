@@ -470,6 +470,30 @@ The hook POSTs `multipart/form-data` with a `file` part (plus `scope` when confi
 
 `image/*` inserts an image, `video/*` a video node, anything else a download link. `Tiptapex.Upload.Controller` implements this contract for you.
 
+To tell the user what is happening, opt in to the upload events:
+
+```heex
+<.tiptapex_editor id="body" upload_url={~p"/admin/tiptapex/uploads"}
+  on_upload_start="upload_started" on_upload_error="upload_failed"
+  upload_max_bytes={25_000_000} />
+```
+
+`upload_max_bytes` (match the controller's `max_bytes`) refuses a larger file in the browser before it is sent, so the user does not wait for the whole file to go up before hearing it is too large.
+
+```elixir
+def handle_event("upload_failed", %{"filename" => name, "status" => status, "error" => error}, socket) do
+  # status: HTTP status, nil when the request got no answer (e.g. offline)
+  # error:  the `error` field of a JSON error response — the upload
+  #         controller's 422 code ("too_large", "unsupported_type", ...) —
+  #         "no_scope" when the record has no scope yet, "too_large" when
+  #         the file is over upload_max_bytes (no start event precedes
+  #         either), or nil
+  {:noreply, put_flash(socket, :error, "#{name} was not uploaded")}
+end
+```
+
+A successful upload still pushes `on_uploaded` (default `"tiptapex_uploaded"`).
+
 ## Working on tiptapex itself
 
 ```bash

@@ -13,7 +13,8 @@
 // All configuration arrives via `data-ttx-*` attributes; see readOpts()
 // below for the full list. Hosts needing JS-level configuration (custom
 // extensions, extra toolbar buttons, collaboration) use `makeEditorHook`.
-import { Editor } from "@tiptap/core"
+import { Editor, Extension } from "@tiptap/core"
+import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { StarterKit } from "@tiptap/starter-kit"
 import { BubbleMenu } from "@tiptap/extension-bubble-menu"
 import { CharacterCount } from "@tiptap/extension-character-count"
@@ -174,11 +175,15 @@ export function buildExtensions(opts = {}) {
         locale,
         onPages,
       }),
+    onUploadFiles && ImageOnlyPaste.configure({ allowedMimeTypes: uploadMimeTypes, onUploadFiles }),
     onUploadFiles &&
       FileHandler.configure({
         allowedMimeTypes: uploadMimeTypes,
         onDrop: (currentEditor, files, pos) => onUploadFiles(currentEditor, files, pos),
-        onPaste: (currentEditor, files) => onUploadFiles(currentEditor, files, null),
+        // A paste that carries HTML is left to ImageOnlyPaste below.
+        onPaste: (currentEditor, files, html) => {
+          if (!html) onUploadFiles(currentEditor, files, null)
+        },
       }),
     Video,
     ...collabExtensions,
@@ -186,6 +191,55 @@ export function buildExtensions(opts = {}) {
 
   return typeof extend === "function" ? extend(exts) : exts
 }
+
+// Visible text only: markup that lands in <body> without rendering (style,
+// script, Word's <xml>) and zero-width spaces do not count.
+function hasText(html) {
+  if (!html) return false
+  const body = new DOMParser().parseFromString(html, "text/html").body
+  body.querySelectorAll("style, script, xml").forEach((el) => el.remove())
+  return body.textContent.replace(/\u200b/g, "").trim() !== ""
+}
+
+// Pastes that carry files and HTML. Word, Excel and some browsers put a
+// picture of the copied content next to its HTML: when the HTML has visible
+// text it is the real paste, so this steps aside and ProseMirror pastes it
+// as usual. "Copy image" puts the file next to an `<img src=original>`:
+// here the files are uploaded and the HTML is dropped. FileHandler leaves
+// HTML pastes alone and lets them through, so this decides either way,
+// whichever of the two plugins runs first.
+const ImageOnlyPaste = Extension.create({
+  name: "imageOnlyPaste",
+
+  addOptions() {
+    return { allowedMimeTypes: null, onUploadFiles: null }
+  },
+
+  addProseMirrorPlugins() {
+    const { allowedMimeTypes, onUploadFiles } = this.options
+    const editor = this.editor
+
+    return [
+      new Plugin({
+        key: new PluginKey("imageOnlyPaste"),
+        props: {
+          handlePaste(_view, event) {
+            const html = event.clipboardData?.getData("text/html")
+            if (!html || hasText(html)) return false
+
+            const files = Array.from(event.clipboardData.files || []).filter(
+              (file) => !allowedMimeTypes || allowedMimeTypes.includes(file.type)
+            )
+            if (files.length === 0) return false
+
+            onUploadFiles(editor, files, null)
+            return true
+          },
+        },
+      }),
+    ]
+  },
+})
 
 // POSTs one file and returns the endpoint's `{url, content_type, filename}`,
 // or null when uploads are blocked because the scope isn't known yet. This is
@@ -195,9 +249,22 @@ export function buildExtensions(opts = {}) {
 //   request:  multipart "file" + optional "<scopeName>" field,
 //             header "x-csrf-token"
 //   response: {"url": ..., "content_type": ..., "filename": ...}
+//
+// `upload.onStart(file)` runs before the request and `upload.onError(file,
+// {status, error})` on any failure: `status` is null when the request never
+// got an answer, `error` is the `error` field of a JSON error response (the
+// upload controller's 422 code), "no_scope" or "too_large" — the last two
+// come without a start, as no request is made.
 export async function uploadFile(file, upload) {
   if (upload.scopeName != null && !upload.scopeValue) {
     console.warn("[Tiptapex] Cannot upload: no upload scope yet (save the record first).")
+    upload.onError?.(file, { status: null, error: "no_scope" })
+    return null
+  }
+  // Checked here as well as on the server: a proxy that buffers the request
+  // body would otherwise hold the server's answer until the whole file is up.
+  if (upload.maxBytes && file.size > upload.maxBytes) {
+    upload.onError?.(file, { status: null, error: "too_large" })
     return null
   }
 
@@ -205,15 +272,33 @@ export async function uploadFile(file, upload) {
   form.append("file", file)
   if (upload.scopeName != null) form.append(upload.scopeName, upload.scopeValue)
 
-  const resp = await fetch(upload.url, {
-    method: "POST",
-    body: form,
-    headers: { "x-csrf-token": upload.csrfToken },
-    credentials: "same-origin",
-  })
-  if (!resp.ok) throw new Error("Upload failed: " + resp.status)
+  upload.onStart?.(file)
+  let resp
+  try {
+    resp = await fetch(upload.url, {
+      method: "POST",
+      body: form,
+      headers: { "x-csrf-token": upload.csrfToken },
+      credentials: "same-origin",
+    })
+  } catch (e) {
+    upload.onError?.(file, { status: null, error: null })
+    throw e
+  }
+  if (!resp.ok) {
+    // Only the endpoint answers in JSON; a proxy or body-size limit does not.
+    const body = await resp.json().catch(() => null)
+    upload.onError?.(file, { status: resp.status, error: body?.error ?? null })
+    throw new Error("Upload failed: " + resp.status)
+  }
 
-  const result = await resp.json()
+  let result
+  try {
+    result = await resp.json()
+  } catch (e) {
+    upload.onError?.(file, { status: resp.status, error: null })
+    throw e
+  }
   // Tell the LiveView (e.g. so an attachments sidebar can refresh).
   upload.onUploaded?.()
   return result
@@ -225,7 +310,7 @@ export async function uploadAndInsert(editor, files, pos, upload) {
   for (const file of files) {
     try {
       const result = await uploadFile(file, upload)
-      if (!result) return
+      if (!result) continue
 
       const { url, content_type, filename } = result
       const cmd = editor.chain().focus()
@@ -260,8 +345,11 @@ function readOpts(el) {
     uploadUrl: d.ttxUploadUrl || null,
     uploadScopeName: "ttxUploadScopeName" in d ? d.ttxUploadScopeName || DEFAULTS.uploadScopeName : null,
     uploadScopeValue: d.ttxUploadScope || "",
+    uploadMaxBytes: Number(d.ttxUploadMaxBytes) || null,
     changeEvent: "ttxEventChange" in d ? d.ttxEventChange : DEFAULTS.changeEvent,
     uploadedEvent: "ttxEventUploaded" in d ? d.ttxEventUploaded : DEFAULTS.uploadedEvent,
+    uploadStartEvent: d.ttxEventUploadStart || null,
+    uploadErrorEvent: d.ttxEventUploadError || null,
     setContentEvent: d.ttxSetContentEvent || (el.id ? `tiptapex:set-content:${el.id}` : null),
     setPageEvent: d.ttxSetPageEvent || (el.id ? `tiptapex:set-page:${el.id}` : null),
     // null   -> use whatever the document carries
@@ -330,9 +418,17 @@ export function makeEditorHook(staticOpts = {}) {
           url: opts.uploadUrl,
           scopeName: opts.uploadScopeName,
           scopeValue: opts.uploadScopeValue,
+          maxBytes: opts.uploadMaxBytes,
           csrfToken: token,
           onUploaded: () => {
             if (opts.uploadedEvent) this.pushEventTo(el, opts.uploadedEvent, {})
+          },
+          onStart: (file) => {
+            if (opts.uploadStartEvent) this.pushEventTo(el, opts.uploadStartEvent, { filename: file.name })
+          },
+          onError: (file, { status, error }) => {
+            if (opts.uploadErrorEvent)
+              this.pushEventTo(el, opts.uploadErrorEvent, { filename: file.name, status, error })
           },
         }
       }
@@ -344,7 +440,8 @@ export function makeEditorHook(staticOpts = {}) {
       // the page dialog uses it for header/footer logos.
       const uploadImage = upload
         ? async (file) => {
-            const result = await uploadFile(file, upload)
+            // The dialog reports its own failures; the host's events would say it twice.
+            const result = await uploadFile(file, { ...upload, onStart: null, onError: null })
             if (result && result.content_type && !result.content_type.startsWith("image/")) {
               const error = new Error("Not an image: " + result.content_type)
               error.ttxNotAnImage = true

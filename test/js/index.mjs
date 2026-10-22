@@ -4,6 +4,7 @@ import "./page_test.mjs"
 import "./markup_test.mjs"
 import "./pagination_test.mjs"
 import "./editor_test.mjs"
+import "./upload_test.mjs"
 
 import { report } from "./harness.mjs"
 

@@ -351,3 +351,27 @@ t("page: false leaves the page extensions out entirely", () => {
     e.destroy()
   }
 })
+
+// Last in this file: it waits for the upload with its dialog open, and the
+// checks after it would otherwise find that dialog first.
+t("a logo upload that brings back no file says so", async () => {
+  const e = editor({ type: "doc", attrs: { page: PAGE }, content: [paragraph("a")] })
+  const alerts = []
+  const nativeAlert = dom.window.alert
+  dom.window.alert = (message) => alerts.push(message)
+  let dialog
+  try {
+    dialog = openPageDialog(e, { uploadImage: async () => null })
+    document.querySelector(".ttx-dialog-icon-btn[title='Upload image']").click()
+    const input = [...document.querySelectorAll("input[type=file]")].at(-1)
+    Object.defineProperty(input, "files", { value: [new File(["png"], "logo.png", { type: "image/png" })] })
+    input.dispatchEvent(new dom.window.Event("change"))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.deepEqual(alerts, ["The image could not be uploaded."])
+  } finally {
+    dialog?.close()
+    dom.window.alert = nativeAlert
+    e.destroy()
+  }
+})
