@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Logos in wkhtmltopdf headers and footers.** `running_html/3` (what
+  `with_pdf_generator/3` writes for `--header-html` / `--footer-html`) laid
+  the slots out with flexbox, which the QtWebKit of wkhtmltopdf 0.12 does not
+  support: the slots stacked and the first ones (the left logo) fell off the
+  page. They are now the cells of a fixed table. The Chrome templates keep
+  flexbox.
+
 ## [0.1.2] - 2026-07-24
 
 ### Added

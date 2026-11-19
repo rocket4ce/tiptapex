@@ -346,7 +346,7 @@ defmodule Tiptapex.Export.PDF do
     cells =
       page
       |> Page.slots(region)
-      |> Enum.map_join("", &slot_cell(&1, tokens, opts))
+      |> Enum.map_join("", &slot_cell(&1, tokens, opts, :table))
 
     """
     <!DOCTYPE html>
@@ -358,8 +358,10 @@ defmodule Tiptapex.Export.PDF do
       color: #374151;
     }
     /* wkhtmltopdf already lays this out inside the page margins — repeating
-       them here would indent the header twice. */
-    .ttx-running { display: flex; width: 100%; box-sizing: border-box; }
+       them here would indent the header twice. A table, not flexbox: the
+       QtWebKit of wkhtmltopdf 0.12 has no flexbox, so the slots would stack
+       and push the first ones off the page. */
+    .ttx-running { display: table; table-layout: fixed; width: 100%; box-sizing: border-box; }
     </style></head>
     <body>
     <div class="ttx-running">#{cells}</div>
@@ -463,7 +465,7 @@ defmodule Tiptapex.Export.PDF do
       cells =
         page
         |> Page.slots(region)
-        |> Enum.map_join("", &slot_cell(&1, tokens, opts))
+        |> Enum.map_join("", &slot_cell(&1, tokens, opts, :flex))
 
       m = page.margins
 
@@ -477,7 +479,10 @@ defmodule Tiptapex.Export.PDF do
   # One header/footer slot: an optional logo, then the tokenised text. The
   # text may carry the small HTML subset `Tiptapex.Renderer.Markup` allows —
   # sanitised and rebuilt, never passed through.
-  defp slot_cell({slot, %{text: text, image: image}}, tokens, opts) do
+  #
+  # `:flex` is for Chrome. `:table` is for wkhtmltopdf, whose QtWebKit has no
+  # flexbox: each slot is a third of a fixed table, aligned with text-align.
+  defp slot_cell({slot, %{text: text, image: image}}, tokens, opts, layout) do
     rendered = text |> Markup.to_html() |> IO.iodata_to_binary()
 
     content =
@@ -485,9 +490,17 @@ defmodule Tiptapex.Export.PDF do
       |> Enum.reject(&(&1 in [nil, ""]))
       |> Enum.join(" ")
 
-    ~s(<div style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:2mm;) <>
-      ~s(overflow:hidden;justify-content:#{justify_css(slot)};text-align:#{align_css(slot)};">) <>
-      content <> "</div>"
+    ~s(<div style="#{slot_layout_css(layout, slot)}overflow:hidden;) <>
+      ~s(text-align:#{align_css(slot)};">) <> content <> "</div>"
+  end
+
+  defp slot_layout_css(:flex, slot) do
+    "flex:1 1 0;min-width:0;display:flex;align-items:center;gap:2mm;" <>
+      "justify-content:#{justify_css(slot)};"
+  end
+
+  defp slot_layout_css(:table, _slot) do
+    "display:table-cell;width:33.333%;vertical-align:middle;"
   end
 
   defp image_tag(nil, _opts), do: nil
@@ -496,7 +509,7 @@ defmodule Tiptapex.Export.PDF do
     src = Keyword.get(opts, :asset_url, & &1).(image.src)
 
     ~s(<img src="#{escape(src)}" alt="#{escape(image.alt)}" ) <>
-      ~s(style="height:#{round_mm(image.height)}mm;width:auto;flex:none;">)
+      ~s(style="height:#{round_mm(image.height)}mm;width:auto;flex:none;vertical-align:middle;">)
   end
 
   defp align_css(:left), do: "left"
