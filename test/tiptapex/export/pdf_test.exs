@@ -365,6 +365,21 @@ defmodule Tiptapex.Export.PDFTest do
       assert html =~ "location.search"
     end
 
+    test "running_html/3 lays the slots out without flexbox, which wkhtmltopdf lacks" do
+      html =
+        PDF.running_html(@plain, :header,
+          page: %{header: %{left: %{image: @logo}, right: %{image: @logo}}}
+        )
+
+      # The QtWebKit of wkhtmltopdf 0.12 ignores `display: flex`: the slots
+      # stacked and the first ones fell off the top of the page.
+      refute html =~ ~r/display:\s*flex/
+      assert html =~ "display: table;"
+      assert length(String.split(html, "display:table-cell;")) == 4
+      assert html =~ "text-align:left;"
+      assert html =~ "text-align:right;"
+    end
+
     test "with_pdf_generator/3 writes the running files, then removes them" do
       page = %{header: %{left: %{image: @logo}}, footer: %{center: "{page}"}}
 

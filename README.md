@@ -21,7 +21,7 @@ The canonical storage format is the **JSON document** (an Ecto `:map` / Postgres
 # mix.exs
 def deps do
   [
-    {:tiptapex, "~> 0.1.2"}
+    {:tiptapex, "~> 0.1.3"}
   ]
 end
 ```
